@@ -1,6 +1,7 @@
 package com.luna.motioncapture
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -25,6 +26,8 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -83,6 +86,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildInterface() {
         val root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(16, 24, 32)) }
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
         previewView = PreviewView(this).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FILL_CENTER
@@ -132,6 +140,7 @@ class MainActivity : AppCompatActivity() {
             row.addView(button, LinearLayout.LayoutParams(-2, dp(47)))
             return button
         }
+        addAction("Modo rostro") { startActivity(Intent(this, FaceCaptureActivity::class.java)) }
         addAction("Iniciar cámara") { requestCamera() }
         addAction("Cargar PNG") { imagePicker.launch("image/*") }
         cameraButton = addAction("Mostrar cámara") { toggleCamera() }
