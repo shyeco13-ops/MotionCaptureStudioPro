@@ -163,14 +163,22 @@ class FaceFeatureAnimator {
     /** Deformación del PNG original alrededor del ancla de boca, no una figura pintada. */
     fun mouthDisplacementY(x: Float, y: Float, faceWidth: Float, faceHeight: Float): Float {
         if (jaw < .015f) return 0f
-        val mouthWidth = (cornerRightX - cornerLeftX).let { kotlin.math.abs(it) }
+        val mouthWidth = kotlin.math.abs(cornerRightX - cornerLeftX)
             .coerceIn(faceWidth * .08f, faceWidth * .50f)
-        val dx = (x - mouthX) / (mouthWidth * .65f).coerceAtLeast(.005f)
+        val dx = (x - mouthX) / (mouthWidth * .62f).coerceAtLeast(.005f)
         val dy = (y - mouthY) / (faceHeight * .12f).coerceAtLeast(.005f)
-        val influence = exp(-dx * dx * 1.20f - dy * dy * .78f)
-        // Los labios se separan unos píxeles y el efecto se desvanece en la piel.
-        val upperLower = dy / (kotlin.math.abs(dy) + .28f)
-        return upperLower * influence * faceHeight * .032f * jaw * mouthGap
+        val influence = exp(-dx * dx * 1.48f - dy * dy * .88f)
+        // Apertura fisica: arriba se levanta el labio, abajo desciende.
+        // La transicion central es continua, evitando cortes horizontales.
+        val separation = dy / (kotlin.math.abs(dy) + .38f)
+        val lips = separation * influence * faceHeight * .052f * jaw * mouthGap
+        // La barbilla acompana, pero el efecto desaparece antes de las mejillas.
+        val chinX = (x - mouthX) / (faceWidth * .24f).coerceAtLeast(.005f)
+        val chinY = (y - mouthY - faceHeight * .16f) /
+            (faceHeight * .23f).coerceAtLeast(.005f)
+        val chin = exp(-chinX * chinX * 1.8f - chinY * chinY * 1.15f) *
+            faceHeight * .013f * jaw * mouthGap
+        return lips + chin
     }
 
     fun reset(cx: Float, cy: Float, fw: Float, fh: Float) {
@@ -287,13 +295,15 @@ class FaceFeatureAnimator {
         mouthBlendshape = jawBlend
         mouthLandmark = ratioDelta
 
-        val fromBlend = (jawDelta * 2.6f - .018f).coerceIn(0f, 1f)
-        val fromLandmarks = ((ratioDelta - .010f) * 5.7f).coerceIn(0f, 1f)
-        val open = (max(fromBlend, fromLandmarks) * mouthGain * intensity)
+        // La 0.5.3 saturaba la boca al 99% con cambios de labios del 25%.
+        // Evita el "salto" a apertura maxima; conserva la amplitud dinamica.
+        val fromBlend = ((jawDelta - .018f) * 1.75f).coerceIn(0f, 1f)
+        val fromLandmarks = ((ratioDelta - .012f) * 2.65f).coerceIn(0f, 1f)
+        val open = (max(fromBlend, fromLandmarks * .88f) * mouthGain * intensity)
             .coerceIn(0f, 1f)
-        // Subida rápida, bajada progresiva. El control manual es prioritario.
+        // Curva continua de apertura y cierre, sin saltos de la foto.
         val source = manualMouth ?: open
-        val follow = if (source > jaw) .62f else .32f
+        val follow = if (source > jaw) .42f else .24f
         jaw = (jaw + (source - jaw) * follow).coerceIn(0f, 1f)
         val left = target("eyeBlinkLeft", .025f, 1.45f * eyeGain)
         val right = target("eyeBlinkRight", .025f, 1.45f * eyeGain)
