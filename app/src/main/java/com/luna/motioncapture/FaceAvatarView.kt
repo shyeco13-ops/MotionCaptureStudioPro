@@ -377,8 +377,9 @@ class FaceAvatarView(context: Context) : View(context) {
             vertices[i] = (x + moveX / weight) * bitmap.width
             vertices[i + 1] = (y + moveY / weight +
                 features.eyeDisplacementY(x, y, faceWidth, faceHeight) +
-                if (openedMouthPortrait == null)
-                    features.mouthDisplacementY(x, y, faceWidth, faceHeight) else 0f) * bitmap.height
+                // Con foto alternativa TAMBIEN debe moverse el labio del PNG.
+                // Antes solo aparecia un parche abierto sin gesto de mandibula.
+                features.mouthDisplacementY(x, y, faceWidth, faceHeight)) * bitmap.height
         }
         return vertices
     }
