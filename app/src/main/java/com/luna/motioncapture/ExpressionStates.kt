@@ -46,7 +46,7 @@ class ExpressionStates {
     }
 
     private fun setTargets(h: Float, s: Float, a: Float, immediate: Boolean) {
-        val t = if (immediate) 1f else .38f
+        val t = if (immediate) 1f else .54f
         happy += (h * gain - happy) * t
         surprised += (s * gain - surprised) * t
         angry += (a * gain - angry) * t
@@ -69,24 +69,24 @@ class ExpressionStates {
             return
         }
         fun delta(name: String, amplification: Float): Float =
-            ((frame.expression(name) - neutral.expression(name) - .022f) *
+            ((frame.expression(name) - neutral.expression(name) - .012f) *
                 amplification).coerceIn(0f, 1f)
-        val smile = (delta("mouthSmileLeft", 1.35f) +
-            delta("mouthSmileRight", 1.35f)) * .5f
-        val cheek = (delta("cheekSquintLeft", 1.15f) +
-            delta("cheekSquintRight", 1.15f)) * .5f
-        val wide = max(delta("eyeWideLeft", 1.5f), delta("eyeWideRight", 1.5f))
+        val smile = (delta("mouthSmileLeft", 1.70f) +
+            delta("mouthSmileRight", 1.70f)) * .5f
+        val cheek = (delta("cheekSquintLeft", 1.50f) +
+            delta("cheekSquintRight", 1.50f)) * .5f
+        val wide = max(delta("eyeWideLeft", 1.75f), delta("eyeWideRight", 1.75f))
         val browsUp = max(delta("browInnerUp", 1.3f),
             max(delta("browOuterUpLeft", 1f), delta("browOuterUpRight", 1f)))
-        val browDownL = delta("browDownLeft", 1.4f)
-        val browDownR = delta("browDownRight", 1.4f)
+        val browDownL = delta("browDownLeft", 1.8f)
+        val browDownR = delta("browDownRight", 1.8f)
         val frown = max(delta("mouthFrownLeft", 1.25f),
             delta("mouthFrownRight", 1.25f))
         val nose = max(delta("noseSneerLeft", 1f), delta("noseSneerRight", 1f))
-        val h = (smile * .76f + cheek * .36f).coerceIn(0f, 1f)
-        val s = (wide * .57f + browsUp * .46f).coerceIn(0f, 1f)
-        val a = ((browDownL + browDownR) * .34f + frown * .27f +
-            nose * .18f).coerceIn(0f, 1f)
+        val h = (smile * .94f + cheek * .48f).coerceIn(0f, 1f)
+        val s = (wide * .70f + browsUp * .55f).coerceIn(0f, 1f)
+        val a = ((browDownL + browDownR) * .46f + frown * .35f +
+            nose * .22f).coerceIn(0f, 1f)
         setTargets(h, s, a, immediate = false)
         eyeWide = (eyeWide * .62f + wide * .38f * gain).coerceIn(0f, 1f)
         browDown = (browDown * .62f +
