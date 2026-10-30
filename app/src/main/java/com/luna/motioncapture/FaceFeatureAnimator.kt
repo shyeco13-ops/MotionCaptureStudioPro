@@ -107,6 +107,45 @@ class FaceFeatureAnimator {
     }
     private val path = Path()
     private val mouthRenderer = NaturalMouthRenderer()
+    private val expressions = ExpressionStates()
+
+    var expressionGain: Float
+        get() = expressions.gain
+        set(value) { expressions.gain = value }
+
+    val happy: Float get() = expressions.happy
+    val surprised: Float get() = expressions.surprised
+    val angry: Float get() = expressions.angry
+    val eyeWide: Float get() = expressions.eyeWide
+    val browDown: Float get() = expressions.browDown
+    val mouthFrown: Float get() = expressions.mouthFrown
+    val lowerLipDrop: Float get() = expressions.lowerLip
+    val expressionPreset: String get() = expressions.preset.name
+
+    fun selectExpression(name: String) {
+        val preset = try { ExpressionStates.Preset.valueOf(name) }
+            catch (_: IllegalArgumentException) { ExpressionStates.Preset.AUTO }
+        expressions.setPreset(preset)
+        if (preset == ExpressionStates.Preset.AUTO) {
+            expressions.reset()
+            smile = 0f; browLeft = 0f; browRight = 0f
+            cheekLeft = 0f; cheekRight = 0f
+            jaw = 0f; blinkLeft = 0f; blinkRight = 0f
+        } else {
+            applyExpressionPreview()
+        }
+    }
+
+    private fun applyExpressionPreview() {
+        smile = max(smile, expressions.happy * .88f)
+        cheekLeft = max(cheekLeft, expressions.happy * .80f)
+        cheekRight = max(cheekRight, expressions.happy * .80f)
+        browLeft = max(browLeft, expressions.surprised * .85f)
+        browRight = max(browRight, expressions.surprised * .85f)
+        jaw = max(jaw, expressions.surprised * .62f)
+        noseLeft = max(noseLeft, expressions.angry * .22f)
+        noseRight = max(noseRight, expressions.angry * .22f)
+    }
 
     var mouthWidth: Float
         get() = mouthRenderer.widthScale
@@ -150,6 +189,7 @@ class FaceFeatureAnimator {
     }
 
     fun resetExpressions() {
+        expressions.reset()
         jaw = 0f
         blinkLeft = 0f
         blinkRight = 0f
@@ -229,6 +269,7 @@ class FaceFeatureAnimator {
     }
 
     fun update(frame: FaceFrame, neutral: FaceFrame, intensity: Float) {
+        expressions.update(frame, neutral)
         fun target(key: String, deadzone: Float, gain: Float): Float =
             ((frame.expression(key) - neutral.expression(key) - deadzone) *
                 gain * intensity).coerceIn(0f, 1f)
@@ -285,6 +326,16 @@ class FaceFeatureAnimator {
             target("mouthPucker", .02f, 1f),
             target("mouthFunnel", .02f, .65f)
         )
+        if (expressions.preset != ExpressionStates.Preset.AUTO) {
+            applyExpressionPreview()
+        } else {
+            // Estado automático: la sonrisa suavizada acompaña mejillas y boca.
+            smile = max(smile, expressions.happy * .65f)
+            cheekLeft = max(cheekLeft, expressions.happy * .45f)
+            cheekRight = max(cheekRight, expressions.happy * .45f)
+            browLeft = max(browLeft, expressions.surprised * .48f)
+            browRight = max(browRight, expressions.surprised * .48f)
+        }
     }
 
     /**
