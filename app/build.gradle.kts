@@ -13,8 +13,8 @@ android {
         applicationId = "com.luna.motioncapture"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.5.2-alpha"
+        versionCode = 10
+        versionName = "0.5.3-alpha"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
