@@ -111,7 +111,13 @@ class VisemeMouthEngine {
         // to OPEN/HALF instead of inventing facial details.
         val options = Slot.entries.mapNotNull { slot ->
             val photo = images[slot] ?: return@mapNotNull null
-            val weight = weights[slot] ?: 0f
+            var weight = weights[slot] ?: 0f
+            // Compatibilidad con la versión previa: un solo PNG ABIERTO
+            // también funciona sin obligar a cargar todos los demás visemas.
+            if (slot == Slot.OPEN && !images.containsKey(Slot.HALF))
+                weight = max(weight, jaw * .86f)
+            if (slot == Slot.HALF && !images.containsKey(Slot.OPEN))
+                weight = max(weight, jaw * .80f)
             Triple(slot, photo, weight)
         }.sortedByDescending { it.third }.take(2)
         if (options.isEmpty()) return
@@ -121,10 +127,10 @@ class VisemeMouthEngine {
         for ((slot, photo, weight) in options.reversed()) {
             if (weight < .025f) continue
             val jawAmount = when (slot) {
-                Slot.SMILE, Slot.WIDE, Slot.O -> max(.23f, jaw)
-                Slot.LOWER, Slot.TEETH -> max(.28f, jaw)
-                Slot.HALF -> max(.20f, jaw * .67f)
-                Slot.OPEN -> max(.33f, jaw)
+                Slot.SMILE, Slot.WIDE, Slot.O -> max(.65f, jaw)
+                Slot.LOWER, Slot.TEETH -> max(.67f, jaw)
+                Slot.HALF -> max(.53f, jaw * .76f)
+                Slot.OPEN -> max(.67f, jaw)
             }
             val aspectWidth = when (slot) {
                 Slot.O -> .74f
