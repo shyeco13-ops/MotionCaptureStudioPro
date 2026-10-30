@@ -64,7 +64,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                 } else original
                 avatarView.setAvatar(bitmap)
                 avatarView.setPresetPortrait()
-                update("PNG cargado. Activa puntos y arrastra la guía sobre la cara de la foto")
+                update("PNG cargado. Usa AJUSTAR PUNTOS para colocar ojos y boca")
             }
         } catch (e: Exception) { update("No se pudo abrir la imagen: ${e.localizedMessage}") }
     }
@@ -115,7 +115,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.2"
+            text = "FACE CAPTURE · ALPHA 0.2.1"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -163,15 +163,19 @@ class FaceCaptureActivity : AppCompatActivity() {
             avatarView.showGuides = !avatarView.showGuides
             guideButton.text = if (avatarView.showGuides) "Ocultar puntos" else "Mostrar puntos"
         }
+        button("Ajustar puntos: cara") {
+            val selected = avatarView.nextAnchor()
+            update("Toca o arrastra en el PNG para colocar: " + selected)
+        }
         button("Centrar rig") {
             avatarView.setPresetPortrait()
-            update("Rig centrado. Arrastra la guía sobre el rostro del PNG")
+            update("Rig restablecido. Ajusta cada ojo y la boca usando Ajustar puntos")
         }
         recordButton = button("Grabar JSON") { toggleRecord() }
         button("Volver a cuerpo") { finish() }
 
         val caption = TextView(this).apply {
-            text = "Sensibilidad facial · arrastra los puntos para centrar el rig"
+            text = "Sensibilidad facial · Ajustar puntos: cara → ojos → boca"
             textSize = 12f
             setTextColor(Color.WHITE)
             setPadding(dp(13), dp(5), 0, 0)
