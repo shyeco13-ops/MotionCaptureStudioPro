@@ -64,6 +64,19 @@ class FaceAvatarView(context: Context) : View(context) {
         invalidate()
     }
 
+    var lipWidth: Float
+        get() = features.mouthWidth
+        set(value) { features.mouthWidth = value; invalidate() }
+    var lipGap: Float
+        get() = features.mouthGap
+        set(value) { features.mouthGap = value; invalidate() }
+
+    fun toggleMouthInterior(): Boolean {
+        features.mouthInteriorVisible = !features.mouthInteriorVisible
+        invalidate()
+        return features.mouthInteriorVisible
+    }
+
     var eyeSensitivity: Float
         get() = features.eyeGain
         set(value) { features.eyeGain = value.coerceIn(.25f, 2.5f); invalidate() }
@@ -210,19 +223,7 @@ class FaceAvatarView(context: Context) : View(context) {
             warp(.21f, -.20f, 0f, -.06f * (brows + browR), .09f)
             warp(-.17f, .21f, -.045f * smileL, -.035f * smileL, .09f)
             warp(.17f, .21f, .045f * smileR, -.035f * smileR, .09f)
-            // El centro de la boca ya no depende de la guía del rostro:
-            // sigue el ancla BOCA que el usuario coloca sobre el PNG.
-            val openMouth = features.jaw
-            val mx = features.mouthX
-            val my = features.mouthY
-            warps.add(Warp(mx, my - faceHeight * .055f,
-                0f, -faceHeight * .019f * openMouth, .048f))
-            warps.add(Warp(mx, my + faceHeight * .070f,
-                0f, faceHeight * .064f * openMouth, .055f))
-            warps.add(Warp(mx - faceWidth * .15f, my,
-                -faceWidth * .013f * openMouth, 0f, .045f))
-            warps.add(Warp(mx + faceWidth * .15f, my,
-                faceWidth * .013f * openMouth, 0f, .045f))
+            // Boca: la deformación se calcula por vértice en el ancla real del PNG.
         }
 
         for (r in 0..ROWS) for (c in 0..COLS) {
@@ -247,7 +248,8 @@ class FaceAvatarView(context: Context) : View(context) {
             val i = (r * (COLS + 1) + c) * 2
             vertices[i] = (x + moveX / weight) * bitmap.width
             vertices[i + 1] = (y + moveY / weight +
-                features.eyeDisplacementY(x, y, faceWidth, faceHeight)) * bitmap.height
+                features.eyeDisplacementY(x, y, faceWidth, faceHeight) +
+                features.mouthDisplacementY(x, y, faceWidth, faceHeight)) * bitmap.height
         }
         return vertices
     }
