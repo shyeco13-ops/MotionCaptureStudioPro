@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import org.json.JSONObject
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.atan2
@@ -22,6 +23,8 @@ import kotlin.math.sin
  */
 class FaceAvatarView(context: Context) : View(context) {
     private var avatar: Bitmap? = null
+    private var openedMouthPortrait: Bitmap? = null
+    private val mouthPhotoBlend = MouthPhotoBlend()
     private var current: FaceFrame? = null
     private var neutral: FaceFrame? = null
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -50,6 +53,32 @@ class FaceAvatarView(context: Context) : View(context) {
     private var layoutScale = 1f
     private val features = FaceFeatureAnimator()
     private var activeAnchor = 0
+
+    val hasOpenMouthPhoto: Boolean
+        get() = openedMouthPortrait != null
+
+    fun setOpenMouthPhoto(bitmap: Bitmap?) {
+        openedMouthPortrait = bitmap
+        invalidate()
+    }
+
+    fun saveRig(): String = JSONObject().apply {
+        put("version", 2)
+        put("centerX", centerX); put("centerY", centerY)
+        put("faceWidth", faceWidth); put("faceHeight", faceHeight)
+        put("features", features.toJson())
+    }.toString()
+
+    fun loadRig(raw: String): Boolean = try {
+        val obj = JSONObject(raw)
+        centerX = obj.optDouble("centerX", centerX.toDouble()).toFloat().coerceIn(.03f, .97f)
+        centerY = obj.optDouble("centerY", centerY.toDouble()).toFloat().coerceIn(.03f, .97f)
+        faceWidth = obj.optDouble("faceWidth", faceWidth.toDouble()).toFloat().coerceIn(.20f, .95f)
+        faceHeight = obj.optDouble("faceHeight", faceHeight.toDouble()).toFloat().coerceIn(.20f, .95f)
+        obj.optJSONObject("features")?.let { features.fromJson(it) }
+        invalidate()
+        true
+    } catch (_: Exception) { false }
 
     val mouthOpening: Float
         get() = features.jaw
@@ -85,19 +114,24 @@ class FaceAvatarView(context: Context) : View(context) {
         set(value) { features.mouthGain = value.coerceIn(.25f, 2.5f); invalidate() }
 
     fun nextAnchor(): String {
-        activeAnchor = (activeAnchor + 1) % 4
+        activeAnchor = (activeAnchor + 1) % 8
         showGuides = true
         invalidate()
         return when (activeAnchor) {
             1 -> "OJO IZQUIERDO"
             2 -> "OJO DERECHO"
             3 -> "BOCA"
+            4 -> "LABIO SUPERIOR"
+            5 -> "LABIO INFERIOR"
+            6 -> "COMISURA IZQUIERDA"
+            7 -> "COMISURA DERECHA"
             else -> "ROSTRO"
         }
     }
 
     fun setAvatar(value: Bitmap) {
         avatar = value
+        openedMouthPortrait = null
         neutral = null
         current = null
         setPresetPortrait()
@@ -165,7 +199,15 @@ class FaceAvatarView(context: Context) : View(context) {
         canvas.scale(layoutScale, layoutScale)
         val vertices = makeMesh(bitmap)
         canvas.drawBitmapMesh(bitmap, COLS, ROWS, vertices, 0, null, 0, imagePaint)
-        features.draw(canvas, bitmap, faceWidth, faceHeight)
+        features.draw(canvas, bitmap, faceWidth, faceHeight, openedMouthPortrait == null)
+        openedMouthPortrait?.let { opened ->
+            mouthPhotoBlend.draw(
+                canvas, bitmap, opened,
+                features.mouthX, features.mouthY,
+                faceWidth, faceHeight, features.jaw,
+                features.smile, features.mouthWidth, features.mouthGap
+            )
+        }
         if (showGuides) {
             guidePaint.strokeWidth = bitmap.width * .003f
             canvas.drawOval(
@@ -249,7 +291,8 @@ class FaceAvatarView(context: Context) : View(context) {
             vertices[i] = (x + moveX / weight) * bitmap.width
             vertices[i + 1] = (y + moveY / weight +
                 features.eyeDisplacementY(x, y, faceWidth, faceHeight) +
-                features.mouthDisplacementY(x, y, faceWidth, faceHeight)) * bitmap.height
+                if (openedMouthPortrait == null)
+                    features.mouthDisplacementY(x, y, faceWidth, faceHeight) else 0f) * bitmap.height
         }
         return vertices
     }
