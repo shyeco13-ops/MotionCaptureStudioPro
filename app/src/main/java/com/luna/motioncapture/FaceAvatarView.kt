@@ -62,6 +62,40 @@ class FaceAvatarView(context: Context) : View(context) {
         invalidate()
     }
 
+    val mouthPhotoMode: String
+        get() = mouthPhotoBlend.sourceMode.name
+
+    fun setMouthPhotoMode(mode: String) {
+        mouthPhotoBlend.sourceMode = try {
+            MouthPhotoBlend.SourceMode.valueOf(mode)
+        } catch (_: IllegalArgumentException) {
+            MouthPhotoBlend.SourceMode.AUTO
+        }
+        invalidate()
+    }
+
+    fun nextMouthPhotoMode(): String {
+        val modes = MouthPhotoBlend.SourceMode.entries
+        val next = (modes.indexOf(mouthPhotoBlend.sourceMode) + 1) % modes.size
+        mouthPhotoBlend.sourceMode = modes[next]
+        invalidate()
+        return when (mouthPhotoBlend.sourceMode) {
+            MouthPhotoBlend.SourceMode.AUTO -> "Automático"
+            MouthPhotoBlend.SourceMode.FULL_PORTRAIT -> "Rostro completo"
+            MouthPhotoBlend.SourceMode.MOUTH_CROP -> "Recorte de boca"
+        }
+    }
+
+    fun detectedMouthPhotoMode(): String {
+        val original = avatar ?: return "Sin PNG"
+        val alternative = openedMouthPortrait ?: return "Sin foto alternativa"
+        return when (mouthPhotoBlend.effectiveMode(original, alternative)) {
+            MouthPhotoBlend.SourceMode.AUTO -> "Automático"
+            MouthPhotoBlend.SourceMode.FULL_PORTRAIT -> "Rostro completo"
+            MouthPhotoBlend.SourceMode.MOUTH_CROP -> "Recorte de boca"
+        }
+    }
+
     fun saveRig(): String = JSONObject().apply {
         put("version", 2)
         put("centerX", centerX); put("centerY", centerY)
@@ -204,6 +238,9 @@ class FaceAvatarView(context: Context) : View(context) {
             mouthPhotoBlend.draw(
                 canvas, bitmap, opened,
                 features.mouthX, features.mouthY,
+                features.upperLipY, features.lowerLipY,
+                features.cornerLeftX, features.cornerLeftY,
+                features.cornerRightX, features.cornerRightY,
                 faceWidth, faceHeight, features.jaw,
                 features.smile, features.mouthWidth, features.mouthGap
             )
