@@ -46,6 +46,28 @@ class FaceFeatureAnimator {
         private set
     var smile: Float = 0f
         private set
+    var mouthBlendshape: Float = 0f
+        private set
+    var mouthLandmark: Float = 0f
+        private set
+    private var manualMouth: Float? = null
+
+    /** Prueba mecánica sin depender de la cámara. null vuelve a captura automática. */
+    fun setManualMouth(value: Float?) {
+        manualMouth = value?.coerceIn(0f, 1f)
+        if (manualMouth != null) jaw = manualMouth!!
+    }
+
+    private fun openingRatio(frame: FaceFrame): Float {
+        val top = frame.point(13) ?: return 0f
+        val bottom = frame.point(14) ?: return 0f
+        val left = frame.point(33) ?: return 0f
+        val right = frame.point(263) ?: return 0f
+        val eyeDistance = kotlin.math.hypot(right.x - left.x, right.y - left.y)
+            .coerceAtLeast(.09f)
+        val lipDistance = kotlin.math.hypot(bottom.x - top.x, bottom.y - top.y)
+        return (lipDistance / eyeDistance).coerceIn(0f, 1f)
+    }
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val guidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -69,6 +91,8 @@ class FaceFeatureAnimator {
         blinkLeft = 0f
         blinkRight = 0f
         smile = 0f
+        mouthBlendshape = 0f
+        mouthLandmark = 0f
     }
 
     fun translate(dx: Float, dy: Float) {
@@ -94,15 +118,31 @@ class FaceFeatureAnimator {
         fun target(key: String, deadzone: Float, gain: Float): Float =
             ((frame.expression(key) - neutral.expression(key) - deadzone) *
                 gain * intensity).coerceIn(0f, 1f)
-        // Apertura relativamente suave; párpados rápidos para no perder parpadeos cortos.
-        val open = target("jawOpen", .025f, 1.25f * mouthGain)
+        // Usar dos señales: jawOpen de MediaPipe y distancia labial 13-14.
+        // Antes, restar una neutral alta y exigir 10% hacía la boca invisible.
+        val jawBlend = frame.expression("jawOpen")
+        val neutralBlend = neutral.expression("jawOpen")
+        val jawDelta = (jawBlend - neutralBlend).coerceAtLeast(0f)
+        val ratio = openingRatio(frame)
+        val baseRatio = openingRatio(neutral)
+        val ratioDelta = (ratio - baseRatio).coerceAtLeast(0f)
+        mouthBlendshape = jawBlend
+        mouthLandmark = ratioDelta
+
+        val fromBlend = (jawDelta * 2.6f - .018f).coerceIn(0f, 1f)
+        val fromLandmarks = ((ratioDelta - .010f) * 5.7f).coerceIn(0f, 1f)
+        val open = (max(fromBlend, fromLandmarks) * mouthGain * intensity)
+            .coerceIn(0f, 1f)
+        // Subida rápida, bajada progresiva. El control manual es prioritario.
+        val source = manualMouth ?: open
+        val follow = if (source > jaw) .62f else .32f
+        jaw = (jaw + (source - jaw) * follow).coerceIn(0f, 1f)
         val left = target("eyeBlinkLeft", .025f, 1.45f * eyeGain)
         val right = target("eyeBlinkRight", .025f, 1.45f * eyeGain)
         val smiling = max(
             target("mouthSmileLeft", .03f, 1.10f),
             target("mouthSmileRight", .03f, 1.10f)
         )
-        jaw = jaw * .53f + open * .47f
         blinkLeft = blinkLeft * .24f + left * .76f
         blinkRight = blinkRight * .24f + right * .76f
         smile = smile * .66f + smiling * .34f
@@ -166,14 +206,14 @@ class FaceFeatureAnimator {
         crease(eyeLeftX, eyeLeftY, blinkLeft)
         crease(eyeRightX, eyeRightY, blinkRight)
 
-        if (jaw < .10f) return
+        if (jaw < .025f) return
 
         val cx = mouthX * bitmap.width
         val cy = mouthY * bitmap.height
         // Comisuras a los lados y borde superior en forma de arco de Cupido.
         val hw = fw * (.098f + smile * .025f)
-        val opening = (jaw - .07f).coerceIn(0f, 1f)
-        val h = fh * (.008f + opening * .070f)
+        val opening = (jaw * 1.1f).coerceIn(0f, 1f)
+        val h = fh * (.013f + opening * .105f)
         val corner = fh * .010f - smile * fh * .026f
 
         path.reset()
@@ -195,13 +235,13 @@ class FaceFeatureAnimator {
             intArrayOf(dark, shade(dark, .77f), bottom),
             floatArrayOf(0f, .45f, 1f), Shader.TileMode.CLAMP)
         paint.style = Paint.Style.FILL
-        paint.alpha = (opening * 250f).toInt().coerceIn(0, 245)
+        paint.alpha = (opening * 290f).toInt().coerceIn(0, 245)
         canvas.drawPath(path, paint)
         paint.shader = null
 
         // Perfil del labio inferior: color tomado de la foto, no borde morado.
         paint.color = shade(lipSample, .75f)
-        paint.alpha = (opening * 115f).toInt().coerceIn(0, 115)
+        paint.alpha = (opening * 130f).toInt().coerceIn(0, 130)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = max(1f, fw * .008f)
         canvas.drawPath(path, paint)
