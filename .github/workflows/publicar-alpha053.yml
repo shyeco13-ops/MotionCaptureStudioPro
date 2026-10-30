@@ -1,0 +1,56 @@
+name: Publicar APK Alpha 0.5.3 UI y Expresiones
+
+on:
+  push:
+    branches: [feature/alpha-0.5.3-ui-expression-lips]
+    paths:
+      - '.github/workflows/publicar-alpha053.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Compilar y publicar APK directa
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Obtener proyecto
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Configurar Android
+        uses: android-actions/setup-android@v4
+      - name: Instalar SDK Android 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Compilar APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk MotionCaptureStudioPro_Alpha_0_5_3.apk
+      - name: Publicar descarga directa
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v0.5.3-alpha
+          target_commitish: feature/alpha-0.5.3-ui-expression-lips
+          name: Motion Capture Studio Pro - Alpha 0.5.3
+          prerelease: true
+          draft: false
+          body: |
+            Alpha 0.5.3 experimental
+            - Panel plegable con controles en scroll, la foto no queda debajo del menu.
+            - Area del rostro independiente de la interfaz.
+            - Mayor amplitud y velocidad de respuesta de expresiones.
+            - Presets faciales operativos tambien sin iniciar camara.
+            - Mas cobertura y control especifico del labio inferior.
+            - Mantiene las funciones de Alpha 0.5.2 y el modo corporal.
+            Fotos importadas quedan locales; ningun retrato privado se publica.
+            Requiere pruebas visuales en Android; no es reconstruccion 3D.
+          files: MotionCaptureStudioPro_Alpha_0_5_3.apk
+          fail_on_unmatched_files: true
