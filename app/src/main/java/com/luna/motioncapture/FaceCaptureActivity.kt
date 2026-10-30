@@ -115,7 +115,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.2.1"
+            text = "FACE CAPTURE · ALPHA 0.3"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -175,7 +175,7 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Volver a cuerpo") { finish() }
 
         val caption = TextView(this).apply {
-            text = "Sensibilidad facial · Ajustar puntos: cara → ojos → boca"
+            text = "Movimiento general · Ajustar puntos: cara → ojos → boca"
             textSize = 12f
             setTextColor(Color.WHITE)
             setPadding(dp(13), dp(5), 0, 0)
@@ -194,6 +194,32 @@ class FaceCaptureActivity : AppCompatActivity() {
         footer.addView(actionScroll)
         footer.addView(caption)
         footer.addView(slider)
+
+        fun extraControl(title: String, onValue: (Float) -> Unit) {
+            val line = TextView(this).apply {
+                text = "$title (100%)"
+                textSize = 12f
+                setTextColor(Color.rgb(171, 232, 217))
+                setPadding(dp(13), dp(2), 0, 0)
+            }
+            val control = SeekBar(this).apply {
+                max = 200
+                progress = 100
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar: SeekBar?, value: Int, user: Boolean) {
+                        val bounded = value.coerceAtLeast(25)
+                        line.text = "$title ($bounded%)"
+                        onValue(bounded / 100f)
+                    }
+                    override fun onStartTrackingTouch(bar: SeekBar?) {}
+                    override fun onStopTrackingTouch(bar: SeekBar?) {}
+                })
+            }
+            footer.addView(line)
+            footer.addView(control, LinearLayout.LayoutParams(-1, dp(32)))
+        }
+        extraControl("Sensibilidad de ojos") { avatarView.eyeSensitivity = it }
+        extraControl("Sensibilidad de boca") { avatarView.mouthSensitivity = it }
         root.addView(footer, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         setContentView(root)
     }
@@ -269,7 +295,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     }
                 }
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
-                update("Rostro en vivo. Calibra expresión neutra y prueba parpadeo y boca")
+                update("Natural Face 0.3: calibra rostro neutro y ajusta los puntos de ojos y boca")
             } catch (e: Exception) {
                 running = false
                 update("No se pudo iniciar la cámara: ${e.localizedMessage}")
