@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import org.json.JSONObject
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
@@ -33,6 +34,22 @@ class FaceFeatureAnimator {
     var mouthX = .50f
         private set
     var mouthY = .595f
+        private set
+    var upperLipX = .50f
+        private set
+    var upperLipY = .574f
+        private set
+    var lowerLipX = .50f
+        private set
+    var lowerLipY = .620f
+        private set
+    var cornerLeftX = .432f
+        private set
+    var cornerLeftY = .595f
+        private set
+    var cornerRightX = .568f
+        private set
+    var cornerRightY = .595f
         private set
 
     var eyeGain = 1f
@@ -90,7 +107,9 @@ class FaceFeatureAnimator {
     /** Deformación del PNG original alrededor del ancla de boca, no una figura pintada. */
     fun mouthDisplacementY(x: Float, y: Float, faceWidth: Float, faceHeight: Float): Float {
         if (jaw < .015f) return 0f
-        val dx = (x - mouthX) / (faceWidth * .17f).coerceAtLeast(.005f)
+        val mouthWidth = (cornerRightX - cornerLeftX).let { kotlin.math.abs(it) }
+            .coerceIn(faceWidth * .08f, faceWidth * .50f)
+        val dx = (x - mouthX) / (mouthWidth * .65f).coerceAtLeast(.005f)
         val dy = (y - mouthY) / (faceHeight * .12f).coerceAtLeast(.005f)
         val influence = exp(-dx * dx * 1.20f - dy * dy * .78f)
         // Los labios se separan unos píxeles y el efecto se desvanece en la piel.
@@ -105,6 +124,14 @@ class FaceFeatureAnimator {
         eyeRightY = cy - .04f * fh
         mouthX = cx
         mouthY = cy + .25f * fh
+        upperLipX = mouthX
+        upperLipY = mouthY - .044f * fh
+        lowerLipX = mouthX
+        lowerLipY = mouthY + .050f * fh
+        cornerLeftX = mouthX - .132f * fw
+        cornerLeftY = mouthY
+        cornerRightX = mouthX + .132f * fw
+        cornerRightY = mouthY
         resetExpressions()
     }
 
@@ -124,6 +151,14 @@ class FaceFeatureAnimator {
         eyeRightY = (eyeRightY + dy).coerceIn(.03f, .97f)
         mouthX = (mouthX + dx).coerceIn(.03f, .97f)
         mouthY = (mouthY + dy).coerceIn(.03f, .97f)
+        upperLipX = (upperLipX + dx).coerceIn(.03f, .97f)
+        upperLipY = (upperLipY + dy).coerceIn(.03f, .97f)
+        lowerLipX = (lowerLipX + dx).coerceIn(.03f, .97f)
+        lowerLipY = (lowerLipY + dy).coerceIn(.03f, .97f)
+        cornerLeftX = (cornerLeftX + dx).coerceIn(.03f, .97f)
+        cornerLeftY = (cornerLeftY + dy).coerceIn(.03f, .97f)
+        cornerRightX = (cornerRightX + dx).coerceIn(.03f, .97f)
+        cornerRightY = (cornerRightY + dy).coerceIn(.03f, .97f)
     }
 
     fun setAnchor(index: Int, x: Float, y: Float) {
@@ -132,8 +167,47 @@ class FaceFeatureAnimator {
         when (index) {
             1 -> { eyeLeftX = px; eyeLeftY = py }
             2 -> { eyeRightX = px; eyeRightY = py }
-            3 -> { mouthX = px; mouthY = py }
+            3 -> {
+                val dx = px - mouthX
+                val dy = py - mouthY
+                mouthX = px; mouthY = py
+                upperLipX = (upperLipX + dx).coerceIn(.03f, .97f)
+                upperLipY = (upperLipY + dy).coerceIn(.03f, .97f)
+                lowerLipX = (lowerLipX + dx).coerceIn(.03f, .97f)
+                lowerLipY = (lowerLipY + dy).coerceIn(.03f, .97f)
+                cornerLeftX = (cornerLeftX + dx).coerceIn(.03f, .97f)
+                cornerLeftY = (cornerLeftY + dy).coerceIn(.03f, .97f)
+                cornerRightX = (cornerRightX + dx).coerceIn(.03f, .97f)
+                cornerRightY = (cornerRightY + dy).coerceIn(.03f, .97f)
+            }
+            4 -> { upperLipX = px; upperLipY = py }
+            5 -> { lowerLipX = px; lowerLipY = py }
+            6 -> { cornerLeftX = px; cornerLeftY = py }
+            7 -> { cornerRightX = px; cornerRightY = py }
         }
+    }
+
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("eyeLeftX", eyeLeftX); put("eyeLeftY", eyeLeftY)
+        put("eyeRightX", eyeRightX); put("eyeRightY", eyeRightY)
+        put("mouthX", mouthX); put("mouthY", mouthY)
+        put("upperLipX", upperLipX); put("upperLipY", upperLipY)
+        put("lowerLipX", lowerLipX); put("lowerLipY", lowerLipY)
+        put("cornerLeftX", cornerLeftX); put("cornerLeftY", cornerLeftY)
+        put("cornerRightX", cornerRightX); put("cornerRightY", cornerRightY)
+    }
+
+    fun fromJson(json: JSONObject) {
+        fun get(key: String, fallback: Float): Float =
+            json.optDouble(key, fallback.toDouble()).toFloat()
+                .takeIf { it.isFinite() }?.coerceIn(.03f, .97f) ?: fallback
+        eyeLeftX = get("eyeLeftX", eyeLeftX); eyeLeftY = get("eyeLeftY", eyeLeftY)
+        eyeRightX = get("eyeRightX", eyeRightX); eyeRightY = get("eyeRightY", eyeRightY)
+        mouthX = get("mouthX", mouthX); mouthY = get("mouthY", mouthY)
+        upperLipX = get("upperLipX", upperLipX); upperLipY = get("upperLipY", upperLipY)
+        lowerLipX = get("lowerLipX", lowerLipX); lowerLipY = get("lowerLipY", lowerLipY)
+        cornerLeftX = get("cornerLeftX", cornerLeftX); cornerLeftY = get("cornerLeftY", cornerLeftY)
+        cornerRightX = get("cornerRightX", cornerRightX); cornerRightY = get("cornerRightY", cornerRightY)
     }
 
     fun update(frame: FaceFrame, neutral: FaceFrame, intensity: Float) {
@@ -201,7 +275,7 @@ class FaceFeatureAnimator {
         )
     }
 
-    fun draw(canvas: Canvas, bitmap: Bitmap, fwFraction: Float, fhFraction: Float) {
+    fun draw(canvas: Canvas, bitmap: Bitmap, fwFraction: Float, fhFraction: Float, drawMouth: Boolean = true) {
         val fw = fwFraction * bitmap.width
         val fh = fhFraction * bitmap.height
 
@@ -228,7 +302,7 @@ class FaceFeatureAnimator {
         crease(eyeLeftX, eyeLeftY, blinkLeft)
         crease(eyeRightX, eyeRightY, blinkRight)
 
-        mouthRenderer.draw(
+        if (drawMouth) mouthRenderer.draw(
             canvas, bitmap, mouthX, mouthY, fwFraction, fhFraction, jaw, smile
         )
     }
@@ -238,7 +312,11 @@ class FaceFeatureAnimator {
             Triple(cx, cy, "ROSTRO"),
             Triple(eyeLeftX, eyeLeftY, "OJO IZQ."),
             Triple(eyeRightX, eyeRightY, "OJO DER."),
-            Triple(mouthX, mouthY, "BOCA")
+            Triple(mouthX, mouthY, "BOCA"),
+            Triple(upperLipX, upperLipY, "LABIO SUP."),
+            Triple(lowerLipX, lowerLipY, "LABIO INF."),
+            Triple(cornerLeftX, cornerLeftY, "COM. IZQ."),
+            Triple(cornerRightX, cornerRightY, "COM. DER.")
         )
         points.forEachIndexed { i, (x, y, name) ->
             paint.shader = null
