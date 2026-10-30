@@ -252,19 +252,27 @@ class FaceAvatarView(context: Context) : View(context) {
                 (live.expression(key) - base.expression(key)).coerceIn(0f, 1f) * intensity
             val smileL = delta("mouthSmileLeft")
             val smileR = delta("mouthSmileRight")
-            val brows = delta("browInnerUp")
-            val browL = delta("browOuterUpLeft")
-            val browR = delta("browOuterUpRight")
 
             fun warp(fx: Float, fy: Float, dx: Float, dy: Float, radius: Float = .08f) {
                 warps.add(Warp(centerX + fx * faceWidth, centerY + fy * faceHeight,
                     dx * faceWidth, dy * faceHeight, radius))
             }
             // La cara del PNG debe ser frontal. Izquierda/derecha corresponden a la pantalla.
-            warp(-.21f, -.20f, 0f, -.06f * (brows + browL), .09f)
-            warp(.21f, -.20f, 0f, -.06f * (brows + browR), .09f)
-            warp(-.17f, .21f, -.045f * smileL, -.035f * smileL, .09f)
-            warp(.17f, .21f, .045f * smileR, -.035f * smileR, .09f)
+            // Expresiones regionales suavizadas en el retargeter.
+            warp(-.21f, -.20f, 0f, -.045f * features.browLeft, .083f)
+            warp(.21f, -.20f, 0f, -.045f * features.browRight, .083f)
+            warp(-.27f, .10f, -.010f * features.cheekLeft,
+                -.025f * features.cheekLeft, .085f)
+            warp(.27f, .10f, .010f * features.cheekRight,
+                -.025f * features.cheekRight, .085f)
+            warp(-.11f, .08f, -.010f * features.noseLeft,
+                -.011f * features.noseLeft, .045f)
+            warp(.11f, .08f, .010f * features.noseRight,
+                -.011f * features.noseRight, .045f)
+            warp(-.17f, .21f,
+                -.033f * smileL + .030f * features.pucker, -.026f * smileL, .075f)
+            warp(.17f, .21f,
+                .033f * smileR - .030f * features.pucker, -.026f * smileR, .075f)
             // Boca: la deformación se calcula por vértice en el ancla real del PNG.
         }
 
