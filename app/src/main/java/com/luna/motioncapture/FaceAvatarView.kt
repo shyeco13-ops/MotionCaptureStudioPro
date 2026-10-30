@@ -152,6 +152,9 @@ class FaceAvatarView(context: Context) : View(context) {
         get() = features.mouthGap
         set(value) { features.mouthGap = value; invalidate() }
 
+    var lowerLipCoverage: Float = 1f
+        set(value) { field = value.coerceIn(.35f, 2f); invalidate() }
+
     fun toggleMouthInterior(): Boolean {
         features.mouthInteriorVisible = !features.mouthInteriorVisible
         invalidate()
@@ -261,7 +264,8 @@ class FaceAvatarView(context: Context) : View(context) {
                 features.cornerRightX, features.cornerRightY,
                 faceWidth, faceHeight, features.jaw,
                 features.smile, features.lowerLipDrop,
-                features.mouthWidth, features.mouthGap
+                features.mouthWidth, features.mouthGap,
+                lowerLipCoverage
             )
         }
         if (showGuides) {
@@ -288,6 +292,8 @@ class FaceAvatarView(context: Context) : View(context) {
         var headDx = 0f
         var headDy = 0f
         var headAngle = 0f
+        var smileL = 0f
+        var smileR = 0f
 
         if (live != null && base != null) {
             val eyeL = live.point(33)
@@ -306,46 +312,47 @@ class FaceAvatarView(context: Context) : View(context) {
             }
             fun delta(key: String): Float =
                 (live.expression(key) - base.expression(key)).coerceIn(0f, 1f) * intensity
-            val smileL = delta("mouthSmileLeft")
-            val smileR = delta("mouthSmileRight")
-
-            fun warp(fx: Float, fy: Float, dx: Float, dy: Float, radius: Float = .08f) {
+            smileL = delta("mouthSmileLeft")
+            smileR = delta("mouthSmileRight")
+        }
+        // El rig de expresiones se dibuja también SIN cámara para que los
+        // presets manuales sirvan durante la calibración y prueba visual.
+        fun warp(fx: Float, fy: Float, dx: Float, dy: Float, radius: Float = .08f) {
                 warps.add(Warp(centerX + fx * faceWidth, centerY + fy * faceHeight,
                     dx * faceWidth, dy * faceHeight, radius))
             }
             // La cara del PNG debe ser frontal. Izquierda/derecha corresponden a la pantalla.
             // Expresiones regionales suavizadas en el retargeter.
-            warp(-.21f, -.20f, 0f, -.045f * features.browLeft, .083f)
-            warp(.21f, -.20f, 0f, -.045f * features.browRight, .083f)
+            warp(-.21f, -.20f, 0f, -.064f * features.browLeft, .083f)
+            warp(.21f, -.20f, 0f, -.064f * features.browRight, .083f)
             // Ceño fruncido: extremos internos de cejas hacia adentro y abajo.
             warp(-.095f, -.18f, .018f * features.browDown,
-                .041f * features.browDown, .060f)
+                .055f * features.browDown, .060f)
             warp(.095f, -.18f, -.018f * features.browDown,
                 .041f * features.browDown, .060f)
             // Ojos sorprendidos: abrir sin dibujar óvalos artificiales.
-            warp(-.20f, -.083f, 0f, -.026f * features.eyeWide, .063f)
+            warp(-.20f, -.083f, 0f, -.038f * features.eyeWide, .063f)
             warp(.20f, -.083f, 0f, -.026f * features.eyeWide, .063f)
-            warp(-.20f, .012f, 0f, .020f * features.eyeWide, .062f)
+            warp(-.20f, .012f, 0f, .031f * features.eyeWide, .062f)
             warp(.20f, .012f, 0f, .020f * features.eyeWide, .062f)
             warp(-.27f, .10f, -.010f * features.cheekLeft,
-                -.025f * features.cheekLeft, .085f)
+                -.040f * features.cheekLeft, .085f)
             warp(.27f, .10f, .010f * features.cheekRight,
-                -.025f * features.cheekRight, .085f)
+                -.040f * features.cheekRight, .085f)
             warp(-.11f, .08f, -.010f * features.noseLeft,
                 -.011f * features.noseLeft, .045f)
             warp(.11f, .08f, .010f * features.noseRight,
                 -.011f * features.noseRight, .045f)
             warp(-.17f, .21f,
-                -.033f * smileL + .030f * features.pucker,
-                -.026f * smileL + .041f * features.mouthFrown, .075f)
+                -.057f * kotlin.math.max(smileL, features.happy * .76f) + .030f * features.pucker,
+                -.046f * kotlin.math.max(smileL, features.happy * .76f) + .055f * features.mouthFrown, .075f)
             warp(.17f, .21f,
-                .033f * smileR - .030f * features.pucker,
-                -.026f * smileR + .041f * features.mouthFrown, .075f)
+                .057f * kotlin.math.max(smileR, features.happy * .76f) - .030f * features.pucker,
+                -.046f * kotlin.math.max(smileR, features.happy * .76f) + .055f * features.mouthFrown, .075f)
             // Labio inferior y barbilla bajan de forma localizada.
             warp(0f, .34f, 0f,
-                .045f * features.lowerLipDrop, .075f)
+                .058f * features.lowerLipDrop, .075f)
             // Boca: la deformación se calcula por vértice en el ancla real del PNG.
-        }
 
         for (r in 0..ROWS) for (c in 0..COLS) {
             val x = c.toFloat() / COLS
