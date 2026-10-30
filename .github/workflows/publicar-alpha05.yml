@@ -1,0 +1,53 @@
+name: Publicar Alpha 0.5 Preview APK directo
+
+on:
+  push:
+    branches: [feature/alpha-0.5-face-rig]
+    paths:
+      - '.github/workflows/publicar-alpha05.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk-release:
+    name: Compilar y publicar prueba directa
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Configurar Android
+        uses: android-actions/setup-android@v4
+      - name: Instalar SDK
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Crear APK experimental
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk MotionCaptureStudioPro_Alpha_0_5_Preview.apk
+      - name: Publicar enlace directo en Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v0.5.0-alpha-preview
+          target_commitish: feature/alpha-0.5-face-rig
+          name: Motion Capture Studio Pro - Alpha 0.5 Preview
+          prerelease: true
+          draft: false
+          body: |
+            VERSIÓN PREVIEW. Base 0.4 conservada en main.
+            Nuevo: cargar PNG de boca abierta con el mismo encuadre para transición
+            real de labios, ocho puntos ajustables, guardar/restaurar rig local,
+            movimientos suaves adicionales de mejillas, nariz y cejas.
+            Para una boca realista se requiere la segunda foto con boca abierta.
+            Esta APK es de prueba, no una versión definitiva.
+          files: MotionCaptureStudioPro_Alpha_0_5_Preview.apk
+          fail_on_unmatched_files: true
