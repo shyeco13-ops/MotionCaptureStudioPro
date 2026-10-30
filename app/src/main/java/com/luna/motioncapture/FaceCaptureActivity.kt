@@ -56,6 +56,7 @@ class FaceCaptureActivity : AppCompatActivity() {
     private var mouthDemoAnimator: ValueAnimator? = null
     private var mouthWidthStep = 1
     private var avatarKey: String = "demo"
+    private var visemeSlot = VisemeMouthEngine.Slot.HALF
     private var lastMouthReadout = 0L
 
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -79,6 +80,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     .getString(avatarKey, null)
                 val recovered = saved != null && avatarView.loadRig(saved)
                 restoreOpenMouth(avatarKey)
+                restoreVisemes(avatarKey)
                 avatarView.setMouthPhotoMode(
                     getSharedPreferences("rigs_v2", MODE_PRIVATE)
                         .getString("mouthmode_$avatarKey", "AUTO") ?: "AUTO"
@@ -108,12 +110,41 @@ class FaceCaptureActivity : AppCompatActivity() {
                     mouthFile(avatarKey).outputStream().use { output ->
                         fitted.compress(Bitmap.CompressFormat.PNG, 100, output)
                     }
+                    visemeFile(avatarKey, VisemeMouthEngine.Slot.OPEN)
+                        .outputStream().use { output ->
+                            fitted.compress(Bitmap.CompressFormat.PNG, 100, output)
+                        }
                     update("Capa guardada. Detectado: ${avatarView.detectedMouthPhotoMode()}. Puedes cambiar el tipo con 'Tipo de boca'")
                 } catch (e: Exception) {
                     update("Foto de boca abierta activa, pero no se guardó: ${e.localizedMessage}")
                 }
             }
         } catch (e: Exception) { update("No se pudo cargar la boca: ${e.localizedMessage}") }
+    }
+    private val visemePicker = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            val slot = visemeSlot
+            val photo = contentResolver.openInputStream(uri)?.use { input ->
+                val loaded = BitmapFactory.decodeStream(input) ?: error("Imagen no válida")
+                val longest = maxOf(loaded.width, loaded.height)
+                if (longest > 1400) {
+                    val ratio = 1400f / longest
+                    Bitmap.createScaledBitmap(loaded,
+                        (loaded.width * ratio).toInt().coerceAtLeast(1),
+                        (loaded.height * ratio).toInt().coerceAtLeast(1), true)
+                } else loaded
+            } ?: error("No se pudo abrir la imagen")
+            avatarView.setViseme(slot, photo)
+            visemeFile(avatarKey, slot).outputStream().use { output ->
+                check(photo.compress(Bitmap.CompressFormat.PNG, 100, output))
+            }
+            update("Visema ${slot.label} guardada localmente. ${avatarView.visemeSummary()}")
+        } catch (e: Exception) {
+            update("No se pudo cargar el visema: ${e.localizedMessage}")
+        }
     }
     private val saveJson = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -163,6 +194,23 @@ class FaceCaptureActivity : AppCompatActivity() {
     private fun mouthFile(key: String): File =
         File(filesDir, "mouth-${key}.png")
 
+    private fun visemeFile(key: String, slot: VisemeMouthEngine.Slot): File =
+        File(filesDir, "viseme-${key}-${slot.name}.png")
+
+    private fun restoreVisemes(key: String) {
+        for (slot in VisemeMouthEngine.Slot.entries) {
+            val file = visemeFile(key, slot)
+            if (!file.isFile) continue
+            try {
+                BitmapFactory.decodeFile(file.absolutePath)?.let {
+                    avatarView.setViseme(slot, it)
+                }
+            } catch (_: Exception) {
+                // Una capa corrupta no bloquea la imagen base ni otras capas.
+            }
+        }
+    }
+
     private fun restoreOpenMouth(key: String) {
         val file = mouthFile(key)
         if (!file.exists()) return
@@ -201,7 +249,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.5.4"
+            text = "FACE CAPTURE · ALPHA 0.5.5"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -237,6 +285,23 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Iniciar cámara") { requestCamera() }
         button("Cargar PNG") { imagePicker.launch("image/*") }
         button("Boca abierta PNG") { mouthImagePicker.launch("image/*") }
+        button("Siguiente visema") {
+            val list = VisemeMouthEngine.Slot.entries
+            visemeSlot = list[(list.indexOf(visemeSlot) + 1) % list.size]
+            update("Visema seleccionada: ${visemeSlot.label}. Pulsa Cargar visema.")
+        }
+        button("Cargar visema") {
+            visemePicker.launch("image/*")
+        }
+        button("Borrar visema") {
+            avatarView.setViseme(visemeSlot, null)
+            visemeFile(avatarKey, visemeSlot).delete()
+            if (visemeSlot == VisemeMouthEngine.Slot.OPEN) mouthFile(avatarKey).delete()
+            update("Retirada ${visemeSlot.label}. Actuales: ${avatarView.visemeSummary()}")
+        }
+        button("Ver visemas") {
+            update("Capas disponibles: ${avatarView.visemeSummary()}. La boca cerrada es el PNG original.")
+        }
         button("Tipo de boca") {
             val label = avatarView.nextMouthPhotoMode()
             getSharedPreferences("rigs_v2", MODE_PRIVATE).edit()
@@ -244,9 +309,10 @@ class FaceCaptureActivity : AppCompatActivity() {
             update("Tipo seleccionado: $label. Automático detecta foto completa o recorte; usa el modo manual si se equivoca")
         }
         button("Quitar foto boca") {
-            avatarView.setOpenMouthPhoto(null)
+            avatarView.setViseme(VisemeMouthEngine.Slot.OPEN, null)
             mouthFile(avatarKey).delete()
-            update("Boca normal: solo textura o sombreado suave")
+            visemeFile(avatarKey, VisemeMouthEngine.Slot.OPEN).delete()
+            update("Forma abierta retirada. Las demás formas se conservan.")
         }
         cameraButton = button("Mostrar cámara") {
             cameraVisible = !cameraVisible
@@ -332,7 +398,7 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Volver a cuerpo") { finish() }
 
         val caption = TextView(this).apply {
-            text = "Rig avanzado: cara → ojos → boca → labios → comisuras"
+            text = "Visemas: Semiabierta · Abierta · O · Sonrisa · Estirada · Labio inferior · Dientes"
             textSize = 12f
             setTextColor(Color.WHITE)
             setPadding(dp(13), dp(5), 0, 0)
