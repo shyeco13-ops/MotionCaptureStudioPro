@@ -46,6 +46,8 @@ class FaceCaptureActivity : AppCompatActivity() {
     private var lastResultTime = 0L
     private val frames = mutableListOf<FaceFrame>()
     private var recording = false
+    private var mouthTestOn = false
+    private var lastMouthReadout = 0L
 
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         if (it) startCapture() else update("Permite el acceso a la cámara")
@@ -115,7 +117,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.3"
+            text = "FACE CAPTURE · ALPHA 0.3.1"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -166,6 +168,13 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Ajustar puntos: cara") {
             val selected = avatarView.nextAnchor()
             update("Toca o arrastra en el PNG para colocar: " + selected)
+        }
+        button("Probar boca") {
+            mouthTestOn = !mouthTestOn
+            avatarView.previewMouth(if (mouthTestOn) .92f else null)
+            update(if (mouthTestOn)
+                "PRUEBA MANUAL: la boca debe abrirse. Toca de nuevo para volver al seguimiento"
+                else "Boca automática: abre la boca frente a la cámara con el rostro calibrado")
         }
         button("Centrar rig") {
             avatarView.setPresetPortrait()
@@ -276,6 +285,13 @@ class FaceCaptureActivity : AppCompatActivity() {
                         bitmap.recycle()
                         if (frame != null) runOnUiThread {
                             avatarView.updateFace(frame)
+                            if (!mouthTestOn && now - lastMouthReadout > 450L) {
+                                lastMouthReadout = now
+                                val blend = (avatarView.detectedJaw * 100f).toInt()
+                                val opening = (avatarView.mouthOpening * 100f).toInt()
+                                val lips = (avatarView.detectedLipDelta * 100f).toInt()
+                                update("Boca cámara: $blend% · labios Δ$lips% · personaje: $opening%")
+                            }
                             if (recording) {
                                 if (frames.size < 6000) frames.add(frame)
                                 if (frames.size % 25 == 0)
