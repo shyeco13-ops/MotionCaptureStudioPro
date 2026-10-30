@@ -28,6 +28,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.MessageDigest
+import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -67,11 +69,12 @@ class FaceCaptureActivity : AppCompatActivity() {
                         (original.height * ratio).toInt().coerceAtLeast(1), true)
                 } else original
                 avatarView.setAvatar(bitmap)
-                avatarKey = uri.toString()
+                avatarKey = imageKey(bitmap)
                 val saved = getSharedPreferences("rigs_v2", MODE_PRIVATE)
                     .getString(avatarKey, null)
                 val recovered = saved != null && avatarView.loadRig(saved)
-                update(if (recovered) "PNG cargado, puntos guardados recuperados"
+                restoreOpenMouth(avatarKey)
+                update(if (recovered) "PNG cargado, puntos recuperados (rig 0.5)"
                     else "PNG cargado: ajusta ojos, labios y comisuras")
             }
         } catch (e: Exception) { update("No se pudo abrir la imagen: ${e.localizedMessage}") }
@@ -92,7 +95,14 @@ class FaceCaptureActivity : AppCompatActivity() {
                     )
                 } else original
                 avatarView.setOpenMouthPhoto(fitted)
-                update("Imagen de boca abierta cargada: debe coincidir con el encuadre de la foto base")
+                try {
+                    mouthFile(avatarKey).outputStream().use { output ->
+                        fitted.compress(Bitmap.CompressFormat.PNG, 100, output)
+                    }
+                    update("Foto de boca abierta guardada. Debe tener el mismo encuadre que la original")
+                } catch (e: Exception) {
+                    update("Foto de boca abierta activa, pero no se guardó: ${e.localizedMessage}")
+                }
             }
         } catch (e: Exception) { update("No se pudo cargar la boca: ${e.localizedMessage}") }
     }
@@ -118,6 +128,38 @@ class FaceCaptureActivity : AppCompatActivity() {
         getSharedPreferences("rigs_v2", MODE_PRIVATE).getString("demo", null)
             ?.let { avatarView.loadRig(it) }
         update("Modo rostro: prepara tus puntos o carga boca abierta PNG")
+    }
+
+    /**
+     * Clave estable para el mismo PNG aunque el selector cambie su URI.
+     * Muestreo de píxeles, nunca se publican archivos privados.
+     */
+    private fun imageKey(bitmap: Bitmap): String {
+        val hash = MessageDigest.getInstance("SHA-256")
+        hash.update(bitmap.width.toString().toByteArray())
+        hash.update(bitmap.height.toString().toByteArray())
+        for (row in 0 until 24) for (col in 0 until 24) {
+            val pixel = bitmap.getPixel(
+                col * (bitmap.width - 1) / 23,
+                row * (bitmap.height - 1) / 23
+            )
+            hash.update((pixel shr 24).toByte())
+            hash.update((pixel shr 16).toByte())
+            hash.update((pixel shr 8).toByte())
+            hash.update(pixel.toByte())
+        }
+        return hash.digest().take(16).joinToString("") { "%02x".format(it) }
+    }
+
+    private fun mouthFile(key: String): File =
+        File(filesDir, "mouth-${key}.png")
+
+    private fun restoreOpenMouth(key: String) {
+        val file = mouthFile(key)
+        if (!file.exists()) return
+        try {
+            BitmapFactory.decodeFile(file.absolutePath)?.let { avatarView.setOpenMouthPhoto(it) }
+        } catch (_: Exception) { /* La imagen base sigue funcionando sin capa. */ }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density + .5f).toInt()
@@ -182,6 +224,7 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Boca abierta PNG") { mouthImagePicker.launch("image/*") }
         button("Quitar foto boca") {
             avatarView.setOpenMouthPhoto(null)
+            mouthFile(avatarKey).delete()
             update("Boca normal: solo textura o sombreado suave")
         }
         cameraButton = button("Mostrar cámara") {
