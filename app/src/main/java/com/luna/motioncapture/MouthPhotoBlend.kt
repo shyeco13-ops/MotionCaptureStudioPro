@@ -81,38 +81,44 @@ class MouthPhotoBlend {
         gapScale: Float,
         lowerCoverage: Float
     ) {
-        if (jaw <= .025f || opened.width < 2 || opened.height < 2) return
+        if (jaw <= .018f || opened.width < 2 || opened.height < 2) return
         val width = closed.width.toFloat()
         val height = closed.height.toFloat()
 
-        // Coordinates follow the actual four lip landmarks, not a fixed face box.
-        val lipCenterX = (leftCornerX + rightCornerX) * .50f
+        // La foto abierta representa el FINAL del gesto. En los estados
+        // intermedios se comprime hacia la linea de cierre y se revela
+        // progresivamente. No debe aparecer de golpe un parche ya abierto.
+        val raw = ((jaw - .018f) / .88f).coerceIn(0f, 1f)
+        val eased = raw * raw * (3f - 2f * raw)
+        val centerX = (leftCornerX + rightCornerX) * .50f
         val lipCenterY = (upperLipY + lowerLipY) * .50f
-        val cx = (lipCenterX * .65f + mouthX * .35f) * width
+        val cx = (centerX * .82f + mouthX * .18f) * width
         val cornerSpan = abs(rightCornerX - leftCornerX) * width
         val lipSpan = abs(lowerLipY - upperLipY) * height
-        // La Alpha 0.5.1 centraba la máscara demasiado arriba y ocultaba
-        // la mitad inferior de la fotografía alternativa.
-        val lipShift = (height * faceHeight * (
-            .014f * jaw + .019f * lowerLipDrop)).coerceAtMost(height * .025f)
-        val cy = ((lipCenterY * .65f + mouthY * .35f) * height) + lipShift
-
-        val rx = max(cornerSpan * .64f, width * faceWidth * .075f) *
-            widthScale.coerceIn(.55f, 1.55f) * (1f + .05f * smile)
-        val ry = (max(lipSpan * 1.22f, height * faceHeight * .068f) +
-            height * faceHeight * (.018f * jaw + .022f * lowerLipDrop)) *
-            gapScale.coerceIn(.20f, 1.55f) *
-            (.81f + .19f * jaw.coerceIn(0f, 1f))
-
-        val safeRx = rx.coerceIn(4f, width * .25f)
-        val safeRy = ry.coerceIn(3f, height * .12f)
-        // Una máscara SIMÉTRICA cortaba el labio inferior. Usamos límites
-        // verticales diferentes: más espacio bajo los labios y barbilla.
-        val upperReach = safeRy * .98f
-        val lowerReach = safeRy * (.98f + .47f * lowerCoverage.coerceIn(.35f, 2f))
-        val bounds = RectF(
-            cx - safeRx, cy - upperReach,
-            cx + safeRx, cy + lowerReach
+        // Restringido a labios/comisuras. La mascara antigua (64% del ancho)
+        // invadia mejillas y mostraba diferencias de color de la segunda foto.
+        val fullRx = (max(cornerSpan * .49f, width * faceWidth * .055f) *
+            widthScale.coerceIn(.55f, 1.55f) * (1f + .025f * smile))
+            .coerceIn(4f, width * .19f)
+        val fullRy = (max(lipSpan * 1.13f, height * faceHeight * .073f) +
+            height * faceHeight * (.027f * lowerLipDrop)) *
+            gapScale.coerceIn(.20f, 1.55f)
+        val safeRy = fullRy.coerceIn(3f, height * .11f)
+        val rx = fullRx * (.85f + .15f * eased)
+        val ry = safeRy * (.25f + .75f * eased)
+        // La mandibula se desplaza, pero la comisura no salta bruscamente.
+        val cy = (lipCenterY * .78f + mouthY * .22f) * height +
+            height * faceHeight * (.008f * eased + .014f * lowerLipDrop * eased)
+        val upperReach = ry * 1.04f
+        val lowerReach = ry * (1.05f + .28f * lowerCoverage.coerceIn(.35f, 2f))
+        val bounds = RectF(cx - rx, cy - upperReach, cx + rx, cy + lowerReach)
+        // Muestra final, sin comprimir. La transformacion al rectangulo
+        // bounds produce todos los fotogramas intermedios del movimiento.
+        val sourceBounds = RectF(
+            cx - fullRx, (lipCenterY * .78f + mouthY * .22f) * height -
+                safeRy * 1.04f,
+            cx + fullRx, (lipCenterY * .78f + mouthY * .22f) * height +
+                safeRy * (1.05f + .28f * lowerCoverage.coerceIn(.35f, 2f))
         )
         val mode = effectiveMode(closed, opened)
 
@@ -123,20 +129,21 @@ class MouthPhotoBlend {
             // Usar el rectángulo completo de destino para tomar la misma
             // región de la foto abierta, incluyendo el labio inferior.
             Rect(
-                (bounds.left * sx).toInt().coerceIn(0, opened.width - 2),
-                (bounds.top * sy).toInt().coerceIn(0, opened.height - 2),
-                (bounds.right * sx).toInt().coerceIn(2, opened.width),
-                (bounds.bottom * sy).toInt().coerceIn(2, opened.height)
+                (sourceBounds.left * sx).toInt().coerceIn(0, opened.width - 2),
+                (sourceBounds.top * sy).toInt().coerceIn(0, opened.height - 2),
+                (sourceBounds.right * sx).toInt().coerceIn(2, opened.width),
+                (sourceBounds.bottom * sy).toInt().coerceIn(2, opened.height)
             )
         } else {
             // A crop is a mouth image, not an entire face.
             centeredCrop(opened.width, opened.height,
-                (bounds.width() / bounds.height().coerceAtLeast(1f)))
+                (sourceBounds.width() / sourceBounds.height().coerceAtLeast(1f)))
         }
         if (src.width() < 2 || src.height() < 2) return
 
-        val strength = ((jaw - .025f) / .60f).coerceIn(0f, 1f)
-        val smooth = strength * strength * (3f - 2f * strength)
+        // El movimiento principal lo hace la malla, no un crossfade fuerte.
+        // Una fotografia fija nunca debe mostrarse entera al 20% de abertura.
+        val smooth = eased * eased * (3f - 2f * eased)
 
         // Everything is confined to this offscreen layer.
         val layer = canvas.saveLayer(bounds, null)
@@ -155,7 +162,7 @@ class MouthPhotoBlend {
             // Más textura del labio inferior, manteniendo el contorno
             // completamente transparente antes de llegar al borde.
             matrix.setScale(
-                safeRx * .98f,
+                rx * .985f,
                 bounds.height() * .51f
             )
             matrix.postTranslate(cx, bounds.centerY())
