@@ -63,6 +63,20 @@ class FaceFeatureAnimator {
         private set
     var smile: Float = 0f
         private set
+    var cheekLeft = 0f
+        private set
+    var cheekRight = 0f
+        private set
+    var noseLeft = 0f
+        private set
+    var noseRight = 0f
+        private set
+    var browLeft = 0f
+        private set
+    var browRight = 0f
+        private set
+    var pucker = 0f
+        private set
     var mouthBlendshape: Float = 0f
         private set
     var mouthLandmark: Float = 0f
@@ -140,6 +154,10 @@ class FaceFeatureAnimator {
         blinkLeft = 0f
         blinkRight = 0f
         smile = 0f
+        cheekLeft = 0f; cheekRight = 0f
+        noseLeft = 0f; noseRight = 0f
+        browLeft = 0f; browRight = 0f
+        pucker = 0f
         mouthBlendshape = 0f
         mouthLandmark = 0f
     }
@@ -242,6 +260,31 @@ class FaceFeatureAnimator {
         blinkLeft = blinkLeft * .24f + left * .76f
         blinkRight = blinkRight * .24f + right * .76f
         smile = smile * .66f + smiling * .34f
+        // Curvas suaves y separadas: mejillas y cejas responden más gradualmente.
+        cheekLeft = cheekLeft * .68f + .32f * max(
+            target("cheekSquintLeft", .025f, 1f),
+            target("mouthSmileLeft", .03f, .65f)
+        )
+        cheekRight = cheekRight * .68f + .32f * max(
+            target("cheekSquintRight", .025f, 1f),
+            target("mouthSmileRight", .03f, .65f)
+        )
+        browLeft = browLeft * .62f + .38f * max(
+            target("browOuterUpLeft", .02f, 1.1f),
+            target("browInnerUp", .03f, .75f)
+        )
+        browRight = browRight * .62f + .38f * max(
+            target("browOuterUpRight", .02f, 1.1f),
+            target("browInnerUp", .03f, .75f)
+        )
+        noseLeft = noseLeft * .74f + .26f *
+            target("noseSneerLeft", .025f, .7f)
+        noseRight = noseRight * .74f + .26f *
+            target("noseSneerRight", .025f, .7f)
+        pucker = pucker * .60f + .40f * max(
+            target("mouthPucker", .02f, 1f),
+            target("mouthFunnel", .02f, .65f)
+        )
     }
 
     /**
