@@ -25,6 +25,7 @@ class FaceAvatarView(context: Context) : View(context) {
     private var avatar: Bitmap? = null
     private var openedMouthPortrait: Bitmap? = null
     private val mouthPhotoBlend = MouthPhotoBlend()
+    private val visemes = VisemeMouthEngine()
     private var current: FaceFrame? = null
     private var neutral: FaceFrame? = null
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -59,6 +60,25 @@ class FaceAvatarView(context: Context) : View(context) {
 
     fun setOpenMouthPhoto(bitmap: Bitmap?) {
         openedMouthPortrait = bitmap
+        visemes.setImage(VisemeMouthEngine.Slot.OPEN, bitmap)
+        invalidate()
+    }
+
+    fun setViseme(slot: VisemeMouthEngine.Slot, bitmap: Bitmap?) {
+        visemes.setImage(slot, bitmap)
+        if (slot == VisemeMouthEngine.Slot.OPEN) openedMouthPortrait = bitmap
+        invalidate()
+    }
+
+    fun hasViseme(slot: VisemeMouthEngine.Slot): Boolean =
+        visemes.image(slot) != null
+
+    fun visemeSummary(): String = visemes.loadedDescription()
+    fun clearAllVisemes() {
+        for (slot in VisemeMouthEngine.Slot.entries) {
+            visemes.setImage(slot, null)
+        }
+        openedMouthPortrait = null
         invalidate()
     }
 
@@ -71,6 +91,7 @@ class FaceAvatarView(context: Context) : View(context) {
         } catch (_: IllegalArgumentException) {
             MouthPhotoBlend.SourceMode.AUTO
         }
+        visemes.sourceMode = mouthPhotoBlend.sourceMode
         invalidate()
     }
 
@@ -78,6 +99,7 @@ class FaceAvatarView(context: Context) : View(context) {
         val modes = MouthPhotoBlend.SourceMode.entries
         val next = (modes.indexOf(mouthPhotoBlend.sourceMode) + 1) % modes.size
         mouthPhotoBlend.sourceMode = modes[next]
+        visemes.sourceMode = mouthPhotoBlend.sourceMode
         invalidate()
         return when (mouthPhotoBlend.sourceMode) {
             MouthPhotoBlend.SourceMode.AUTO -> "Automático"
@@ -142,6 +164,7 @@ class FaceAvatarView(context: Context) : View(context) {
     /** Boca fija de prueba: así se diferencia un problema de dibujo de uno de detección. */
     fun previewMouth(value: Float?) {
         features.setManualMouth(value)
+        visemes.updateManual(value ?: 0f)
         invalidate()
     }
 
@@ -186,7 +209,7 @@ class FaceAvatarView(context: Context) : View(context) {
 
     fun setAvatar(value: Bitmap) {
         avatar = value
-        openedMouthPortrait = null
+        clearAllVisemes()
         neutral = null
         current = null
         setPresetPortrait()
@@ -196,7 +219,11 @@ class FaceAvatarView(context: Context) : View(context) {
     fun updateFace(frame: FaceFrame) {
         current = frame
         if (neutral == null) neutral = frame
-        neutral?.let { features.update(frame, it, intensity) }
+        neutral?.let {
+            features.update(frame, it, intensity)
+            visemes.update(frame, it, features.jaw, features.smile,
+                features.pucker, features.lowerLipDrop)
+        }
         invalidate()
     }
 
@@ -254,20 +281,8 @@ class FaceAvatarView(context: Context) : View(context) {
         canvas.scale(layoutScale, layoutScale)
         val vertices = makeMesh(bitmap)
         canvas.drawBitmapMesh(bitmap, COLS, ROWS, vertices, 0, null, 0, imagePaint)
-        features.draw(canvas, bitmap, faceWidth, faceHeight, openedMouthPortrait == null)
-        openedMouthPortrait?.let { opened ->
-            mouthPhotoBlend.draw(
-                canvas, bitmap, opened,
-                features.mouthX, features.mouthY,
-                features.upperLipY, features.lowerLipY,
-                features.cornerLeftX, features.cornerLeftY,
-                features.cornerRightX, features.cornerRightY,
-                faceWidth, faceHeight, features.jaw,
-                features.smile, features.lowerLipDrop,
-                features.mouthWidth, features.mouthGap,
-                lowerLipCoverage
-            )
-        }
+        features.draw(canvas, bitmap, faceWidth, faceHeight, !visemes.hasLayers)
+        visemes.render(canvas, bitmap, features, faceWidth, faceHeight, lowerLipCoverage)
         if (showGuides) {
             guidePaint.strokeWidth = bitmap.width * .003f
             canvas.drawOval(
