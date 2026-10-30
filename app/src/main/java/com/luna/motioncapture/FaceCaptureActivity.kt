@@ -74,7 +74,11 @@ class FaceCaptureActivity : AppCompatActivity() {
                     .getString(avatarKey, null)
                 val recovered = saved != null && avatarView.loadRig(saved)
                 restoreOpenMouth(avatarKey)
-                update(if (recovered) "PNG cargado, puntos recuperados (rig 0.5)"
+                avatarView.setMouthPhotoMode(
+                    getSharedPreferences("rigs_v2", MODE_PRIVATE)
+                        .getString("mouthmode_$avatarKey", "AUTO") ?: "AUTO"
+                )
+                update(if (recovered) "PNG cargado, puntos recuperados (rig 0.5.1)"
                     else "PNG cargado: ajusta ojos, labios y comisuras")
             }
         } catch (e: Exception) { update("No se pudo abrir la imagen: ${e.localizedMessage}") }
@@ -99,7 +103,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     mouthFile(avatarKey).outputStream().use { output ->
                         fitted.compress(Bitmap.CompressFormat.PNG, 100, output)
                     }
-                    update("Foto de boca abierta guardada. Debe tener el mismo encuadre que la original")
+                    update("Capa guardada. Detectado: ${avatarView.detectedMouthPhotoMode()}. Puedes cambiar el tipo con 'Tipo de boca'")
                 } catch (e: Exception) {
                     update("Foto de boca abierta activa, pero no se guardó: ${e.localizedMessage}")
                 }
@@ -187,7 +191,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.5"
+            text = "FACE CAPTURE · ALPHA 0.5.1"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -222,6 +226,12 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Iniciar cámara") { requestCamera() }
         button("Cargar PNG") { imagePicker.launch("image/*") }
         button("Boca abierta PNG") { mouthImagePicker.launch("image/*") }
+        button("Tipo de boca") {
+            val label = avatarView.nextMouthPhotoMode()
+            getSharedPreferences("rigs_v2", MODE_PRIVATE).edit()
+                .putString("mouthmode_$avatarKey", avatarView.mouthPhotoMode).apply()
+            update("Tipo seleccionado: $label. Automático detecta foto completa o recorte; usa el modo manual si se equivoca")
+        }
         button("Quitar foto boca") {
             avatarView.setOpenMouthPhoto(null)
             mouthFile(avatarKey).delete()
@@ -415,7 +425,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     }
                 }
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
-                update("Rig 0.5: ajusta labios y comisuras; calibra antes de hablar")
+                update("Smart Mouth 0.5.1: recorte/foto completa, mascara suave y labios ajustables")
             } catch (e: Exception) {
                 running = false
                 update("No se pudo iniciar la cámara: ${e.localizedMessage}")
