@@ -285,10 +285,12 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Iniciar cámara") { requestCamera() }
         button("Cargar PNG") { imagePicker.launch("image/*") }
         button("Boca abierta PNG") { mouthImagePicker.launch("image/*") }
-        button("Siguiente visema") {
+        lateinit var visemeSelector: Button
+        visemeSelector = button("Visema: Semiabierta") {
             val list = VisemeMouthEngine.Slot.entries
             visemeSlot = list[(list.indexOf(visemeSlot) + 1) % list.size]
-            update("Visema seleccionada: ${visemeSlot.label}. Pulsa Cargar visema.")
+            visemeSelector.text = "Visema: ${visemeSlot.label}"
+            update("Seleccionada: ${visemeSlot.label}. Pulsa Cargar visema.")
         }
         button("Cargar visema") {
             visemePicker.launch("image/*")
@@ -449,6 +451,7 @@ class FaceCaptureActivity : AppCompatActivity() {
         extraControl("Apertura máxima") { avatarView.lipGap = it.coerceIn(.20f, 1.5f) }
         extraControl("Expresividad facial") { avatarView.expressionSensitivity = it }
         extraControl("Labio inferior") { avatarView.lowerLipCoverage = it.coerceIn(.35f, 2f) }
+        extraControl("Mezcla de visemas") { avatarView.visemeBlendIntensity = it.coerceIn(.25f, 1.5f) }
 
         // El panel es un área desplazable con altura limitada; el rostro
         // siempre ocupa su propia sección sin quedar tapado por controles.
