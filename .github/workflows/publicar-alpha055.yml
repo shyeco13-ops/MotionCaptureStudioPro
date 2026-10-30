@@ -5,6 +5,7 @@ on:
     branches: [feature/alpha-0.5.5-viseme-system]
     paths:
       - '.github/workflows/publicar-alpha055.yml'
+      - 'docs/ALPHA-0.5.5-VISEMAS-Y-RUTA-3D.md'
   workflow_dispatch:
 
 permissions:
@@ -46,6 +47,8 @@ jobs:
             - Atlas de 7 bocas opcionales: semiabierta, abierta, O, sonrisa,
               estirada, labio inferior y dientes; cerrada es el retrato original.
             - Interpolacion suave de visemas usando blendshapes de MediaPipe.
+            - Respaldo para una unica imagen de boca abierta.
+            - Control para graduar la intensidad de la mezcla de visemas.
             - Rig local para comisuras, labio superior e inferior.
             - Carga, borrado y persistencia privada por retrato.
             - Reutiliza foto OPEN previa si ya existe.
