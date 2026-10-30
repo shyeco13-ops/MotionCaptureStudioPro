@@ -73,6 +73,10 @@ class FaceAvatarView(context: Context) : View(context) {
     fun hasViseme(slot: VisemeMouthEngine.Slot): Boolean =
         visemes.image(slot) != null
 
+    var visemeBlendIntensity: Float
+        get() = visemes.blendIntensity
+        set(value) { visemes.blendIntensity = value; invalidate() }
+
     fun visemeSummary(): String = visemes.loadedDescription()
     fun clearAllVisemes() {
         for (slot in VisemeMouthEngine.Slot.entries) {
