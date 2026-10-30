@@ -14,6 +14,8 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.ScrollView
+import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -176,14 +178,19 @@ class FaceCaptureActivity : AppCompatActivity() {
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
+        // Distribución real en vertical: la vista del personaje tiene su
+        // propio espacio y NUNCA queda debajo del menú.
+        val screen = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(screen, FrameLayout.LayoutParams(-1, -1))
+        val viewer = FrameLayout(this)
         previewView = PreviewView(this).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FILL_CENTER
             alpha = 0f
         }
         avatarView = FaceAvatarView(this)
-        root.addView(previewView, FrameLayout.LayoutParams(-1, -1))
-        root.addView(avatarView, FrameLayout.LayoutParams(-1, -1))
+        viewer.addView(previewView, FrameLayout.LayoutParams(-1, -1))
+        viewer.addView(avatarView, FrameLayout.LayoutParams(-1, -1))
 
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -191,7 +198,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.5.2"
+            text = "FACE CAPTURE · ALPHA 0.5.3"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -201,7 +208,8 @@ class FaceCaptureActivity : AppCompatActivity() {
             textSize = 12f
         }
         header.addView(status)
-        root.addView(header, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        screen.addView(header, LinearLayout.LayoutParams(-1, -2))
+        screen.addView(viewer, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val footer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -322,9 +330,12 @@ class FaceCaptureActivity : AppCompatActivity() {
                 override fun onStopTrackingTouch(bar: SeekBar?) {}
             })
         }
-        footer.addView(actionScroll)
-        footer.addView(caption)
-        footer.addView(slider)
+        val advancedContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        advancedContent.addView(actionScroll)
+        advancedContent.addView(caption)
+        advancedContent.addView(slider)
 
         fun extraControl(title: String, onValue: (Float) -> Unit) {
             val line = TextView(this).apply {
@@ -346,14 +357,68 @@ class FaceCaptureActivity : AppCompatActivity() {
                     override fun onStopTrackingTouch(bar: SeekBar?) {}
                 })
             }
-            footer.addView(line)
-            footer.addView(control, LinearLayout.LayoutParams(-1, dp(32)))
+            advancedContent.addView(line)
+            advancedContent.addView(control, LinearLayout.LayoutParams(-1, dp(32)))
         }
         extraControl("Sensibilidad de ojos") { avatarView.eyeSensitivity = it }
         extraControl("Sensibilidad de boca") { avatarView.mouthSensitivity = it }
         extraControl("Apertura máxima") { avatarView.lipGap = it.coerceIn(.20f, 1.5f) }
         extraControl("Expresividad facial") { avatarView.expressionSensitivity = it }
-        root.addView(footer, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+        extraControl("Labio inferior") { avatarView.lowerLipCoverage = it.coerceIn(.35f, 2f) }
+
+        // El panel es un área desplazable con altura limitada; el rostro
+        // siempre ocupa su propia sección sin quedar tapado por controles.
+        val advancedScroll = ScrollView(this).apply {
+            isFillViewport = false
+            isVerticalScrollBarEnabled = true
+            addView(advancedContent)
+            visibility = View.GONE
+        }
+        val quick = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val toggle = Button(this).apply {
+            text = "Controles ▴"
+            textSize = 11f
+            isAllCaps = false
+        }
+        toggle.setOnClickListener {
+            val expanding = advancedScroll.visibility != View.VISIBLE
+            advancedScroll.visibility = if (expanding) View.VISIBLE else View.GONE
+            toggle.text = if (expanding) "Ocultar ▾" else "Controles ▴"
+        }
+        quick.addView(toggle, LinearLayout.LayoutParams(0, dp(44), 1f))
+
+        val quickCamera = Button(this).apply {
+            text = "Cámara"
+            textSize = 11f
+            isAllCaps = false
+            setOnClickListener { requestCamera() }
+        }
+        quick.addView(quickCamera, LinearLayout.LayoutParams(0, dp(44), 1f))
+
+        val quickLoad = Button(this).apply {
+            text = "Cargar PNG"
+            textSize = 11f
+            isAllCaps = false
+            setOnClickListener { imagePicker.launch("image/*") }
+        }
+        quick.addView(quickLoad, LinearLayout.LayoutParams(0, dp(44), 1f))
+
+        val quickExpression = Button(this).apply {
+            text = "Expresión"
+            textSize = 11f
+            isAllCaps = false
+            setOnClickListener {
+                val mode = avatarView.nextExpressionPreset()
+                update("Expresión: $mode. Elige Controles para ajustar intensidad")
+            }
+        }
+        quick.addView(quickExpression, LinearLayout.LayoutParams(0, dp(44), 1f))
+        footer.addView(quick)
+        footer.addView(advancedScroll, LinearLayout.LayoutParams(-1, dp(220)))
+        screen.addView(footer, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
     }
 
