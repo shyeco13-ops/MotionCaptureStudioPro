@@ -79,7 +79,8 @@ class MouthPhotoBlend {
         lowerLipDrop: Float,
         widthScale: Float,
         gapScale: Float,
-        lowerCoverage: Float
+        lowerCoverage: Float,
+        layerWeight: Float = 1f
     ) {
         if (jaw <= .018f || opened.width < 2 || opened.height < 2) return
         val width = closed.width.toFloat()
@@ -148,7 +149,7 @@ class MouthPhotoBlend {
         // Everything is confined to this offscreen layer.
         val layer = canvas.saveLayer(bounds, null)
         try {
-            photoPaint.alpha = (smooth * 255f).toInt().coerceIn(0, 255)
+            photoPaint.alpha = (smooth * layerWeight.coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255)
             canvas.drawBitmap(opened, src, bounds, photoPaint)
             photoPaint.alpha = 255
 
