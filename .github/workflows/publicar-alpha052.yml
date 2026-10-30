@@ -1,0 +1,55 @@
+name: Publicar APK Alpha 0.5.2 Expression Upgrade
+
+on:
+  push:
+    branches: [feature/alpha-0.5.2-expressions]
+    paths:
+      - '.github/workflows/publicar-alpha052.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Compilar y publicar APK directa
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Configurar Android
+        uses: android-actions/setup-android@v4
+      - name: Instalar SDK Android 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Compilar APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk MotionCaptureStudioPro_Alpha_0_5_2.apk
+      - name: Publicar en GitHub Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v0.5.2-alpha
+          target_commitish: feature/alpha-0.5.2-expressions
+          name: Motion Capture Studio Pro - Alpha 0.5.2
+          prerelease: true
+          draft: false
+          body: |
+            Alpha 0.5.2: Expression Upgrade + Lower Lip Fix
+            - Region de boca con mayor cobertura de labio inferior.
+            - Reconocimiento facial de senales feliz, sorpresa y enojo.
+            - Selector de expresiones AUTO / FELIZ / SORPRESA / ENOJO.
+            - Intensidad facial independiente.
+            - Movimientos localizados de cejas, mejillas, ojos, nariz y comisuras.
+            - Mantiene Alpha 0.5.1 como respaldo y conserva captura corporal.
+            APK debug experimental, requiere prueba visual en el telefono.
+          files: MotionCaptureStudioPro_Alpha_0_5_2.apk
+          fail_on_unmatched_files: true
