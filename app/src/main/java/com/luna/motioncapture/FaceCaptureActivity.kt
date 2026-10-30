@@ -198,7 +198,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.5.3"
+            text = "FACE CAPTURE · ALPHA 0.5.4"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -500,7 +500,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     }
                 }
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
-                update("Rig 0.5.2: labio inferior, expresiones feliz/sorpresa/enojo y boca calibrada")
+                update("Rig 0.5.4: apertura progresiva, labios y comisuras suavizados")
             } catch (e: Exception) {
                 running = false
                 update("No se pudo iniciar la cámara: ${e.localizedMessage}")
