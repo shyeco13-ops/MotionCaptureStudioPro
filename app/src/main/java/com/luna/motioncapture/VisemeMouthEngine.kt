@@ -78,6 +78,19 @@ class VisemeMouthEngine {
         blendTargets(opening.coerceIn(0f, 1f), smile, pucker, stretch, lower, teeth, .55f)
     }
 
+    fun updateManualExpression(opening: Float, happy: Float, rounded: Float,
+                               lowerLip: Float) {
+        // Preview of expression presets even before the user starts the camera.
+        blendTargets(opening.coerceIn(0f, 1f), happy.coerceIn(0f, 1f),
+            rounded.coerceIn(0f, 1f), 0f, lowerLip.coerceIn(0f, 1f), 0f, 1f)
+    }
+
+    fun reset() {
+        jaw = 0f; smile = 0f; pucker = 0f
+        stretch = 0f; lower = 0f; teeth = 0f
+        weights.clear()
+    }
+
     private fun blendTargets(j: Float, s: Float, p: Float, w: Float,
                              l: Float, t: Float, speed: Float) {
         fun filtered(old: Float, next: Float): Float = old + (next - old) * speed
