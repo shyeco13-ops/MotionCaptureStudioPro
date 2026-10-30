@@ -49,6 +49,7 @@ jobs:
             - Interpolacion suave de visemas usando blendshapes de MediaPipe.
             - Respaldo para una unica imagen de boca abierta.
             - Control para graduar la intensidad de la mezcla de visemas.
+            - Pruebas de visemas con presets sin usar la camara.
             - Rig local para comisuras, labio superior e inferior.
             - Carga, borrado y persistencia privada por retrato.
             - Reutiliza foto OPEN previa si ya existe.
