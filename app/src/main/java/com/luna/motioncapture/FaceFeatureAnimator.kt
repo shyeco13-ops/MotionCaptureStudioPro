@@ -126,11 +126,14 @@ class FaceFeatureAnimator {
         val preset = try { ExpressionStates.Preset.valueOf(name) }
             catch (_: IllegalArgumentException) { ExpressionStates.Preset.AUTO }
         expressions.setPreset(preset)
+        // Limpiar el preset anterior antes de activar el siguiente. Sin
+        // cámara debe poder probarse cada expresión por separado.
+        smile = 0f; browLeft = 0f; browRight = 0f
+        cheekLeft = 0f; cheekRight = 0f
+        noseLeft = 0f; noseRight = 0f
+        jaw = 0f; blinkLeft = 0f; blinkRight = 0f
         if (preset == ExpressionStates.Preset.AUTO) {
             expressions.reset()
-            smile = 0f; browLeft = 0f; browRight = 0f
-            cheekLeft = 0f; cheekRight = 0f
-            jaw = 0f; blinkLeft = 0f; blinkRight = 0f
         } else {
             applyExpressionPreview()
         }
