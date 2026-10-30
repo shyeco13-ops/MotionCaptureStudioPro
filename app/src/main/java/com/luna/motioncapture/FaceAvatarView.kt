@@ -83,6 +83,7 @@ class FaceAvatarView(context: Context) : View(context) {
             visemes.setImage(slot, null)
         }
         openedMouthPortrait = null
+        visemes.reset()
         invalidate()
     }
 
@@ -149,6 +150,9 @@ class FaceAvatarView(context: Context) : View(context) {
         val presets = arrayOf("AUTO", "FELIZ", "SORPRESA", "ENOJO")
         presetIndex = (presetIndex + 1) % presets.size
         features.selectExpression(presets[presetIndex])
+        visemes.updateManualExpression(
+            features.jaw, features.smile, features.pucker, features.lowerLipDrop
+        )
         invalidate()
         return presets[presetIndex]
     }
