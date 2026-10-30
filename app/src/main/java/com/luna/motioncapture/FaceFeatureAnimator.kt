@@ -75,6 +75,28 @@ class FaceFeatureAnimator {
         setShadowLayer(3f, 1f, 1f, Color.BLACK)
     }
     private val path = Path()
+    private val mouthRenderer = NaturalMouthRenderer()
+
+    var mouthWidth: Float
+        get() = mouthRenderer.widthScale
+        set(value) { mouthRenderer.widthScale = value.coerceIn(.55f, 1.55f) }
+    var mouthGap: Float
+        get() = mouthRenderer.gapScale
+        set(value) { mouthRenderer.gapScale = value.coerceIn(.15f, 1.55f) }
+    var mouthInteriorVisible: Boolean
+        get() = mouthRenderer.showInterior
+        set(value) { mouthRenderer.showInterior = value }
+
+    /** Deformación del PNG original alrededor del ancla de boca, no una figura pintada. */
+    fun mouthDisplacementY(x: Float, y: Float, faceWidth: Float, faceHeight: Float): Float {
+        if (jaw < .015f) return 0f
+        val dx = (x - mouthX) / (faceWidth * .17f).coerceAtLeast(.005f)
+        val dy = (y - mouthY) / (faceHeight * .12f).coerceAtLeast(.005f)
+        val influence = exp(-dx * dx * 1.20f - dy * dy * .78f)
+        // Los labios se separan unos píxeles y el efecto se desvanece en la piel.
+        val upperLower = dy / (kotlin.math.abs(dy) + .28f)
+        return upperLower * influence * faceHeight * .032f * jaw * mouthGap
+    }
 
     fun reset(cx: Float, cy: Float, fw: Float, fh: Float) {
         eyeLeftX = cx - .20f * fw
@@ -206,47 +228,9 @@ class FaceFeatureAnimator {
         crease(eyeLeftX, eyeLeftY, blinkLeft)
         crease(eyeRightX, eyeRightY, blinkRight)
 
-        if (jaw < .025f) return
-
-        val cx = mouthX * bitmap.width
-        val cy = mouthY * bitmap.height
-        // Comisuras a los lados y borde superior en forma de arco de Cupido.
-        val hw = fw * (.098f + smile * .025f)
-        val opening = (jaw * 1.1f).coerceIn(0f, 1f)
-        val h = fh * (.013f + opening * .105f)
-        val corner = fh * .010f - smile * fh * .026f
-
-        path.reset()
-        path.moveTo(cx - hw, cy + corner)
-        path.cubicTo(cx - hw * .65f, cy - h * .45f,
-            cx - hw * .22f, cy - h * .72f, cx, cy - h * .62f)
-        path.cubicTo(cx + hw * .26f, cy - h * .74f,
-            cx + hw * .70f, cy - h * .37f, cx + hw, cy + corner)
-        path.cubicTo(cx + hw * .72f, cy + h * .65f,
-            cx + hw * .27f, cy + h * 1.10f, cx, cy + h)
-        path.cubicTo(cx - hw * .28f, cy + h * 1.12f,
-            cx - hw * .72f, cy + h * .63f, cx - hw, cy + corner)
-        path.close()
-
-        val lipSample = pixel(bitmap, mouthX, mouthY)
-        val dark = shade(lipSample, .30f)
-        val bottom = shade(lipSample, .43f)
-        paint.shader = LinearGradient(cx, cy - h, cx, cy + h,
-            intArrayOf(dark, shade(dark, .77f), bottom),
-            floatArrayOf(0f, .45f, 1f), Shader.TileMode.CLAMP)
-        paint.style = Paint.Style.FILL
-        paint.alpha = (opening * 290f).toInt().coerceIn(0, 245)
-        canvas.drawPath(path, paint)
-        paint.shader = null
-
-        // Perfil del labio inferior: color tomado de la foto, no borde morado.
-        paint.color = shade(lipSample, .75f)
-        paint.alpha = (opening * 130f).toInt().coerceIn(0, 130)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = max(1f, fw * .008f)
-        canvas.drawPath(path, paint)
-        paint.alpha = 255
-        paint.style = Paint.Style.FILL
+        mouthRenderer.draw(
+            canvas, bitmap, mouthX, mouthY, fwFraction, fhFraction, jaw, smile
+        )
     }
 
     fun drawGuides(canvas: Canvas, bitmap: Bitmap, selected: Int, cx: Float, cy: Float) {
