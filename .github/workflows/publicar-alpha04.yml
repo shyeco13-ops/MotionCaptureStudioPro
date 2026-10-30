@@ -1,0 +1,47 @@
+name: Publicar APK Alpha 0.4 - enlace directo
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publicar-alpha04.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Obtener fuentes
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Configurar SDK de Android
+        uses: android-actions/setup-android@v4
+      - name: Instalar Android 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Compilar APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk MotionCaptureStudioPro_Alpha_0_4.apk
+      - name: Publicar descarga estable en Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v0.4.0-alpha
+          name: Motion Capture Studio Pro - Alpha 0.4
+          prerelease: true
+          draft: false
+          body: |
+            Versión experimental Alpha 0.4 con Natural Mouth Upgrade.
+            Descarga el APK directamente en Android.
+            APK de depuración: no es una versión firmada de producción.
+          files: MotionCaptureStudioPro_Alpha_0_4.apk
+          fail_on_unmatched_files: true
