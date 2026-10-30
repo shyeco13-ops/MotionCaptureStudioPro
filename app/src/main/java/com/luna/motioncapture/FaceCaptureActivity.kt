@@ -47,6 +47,7 @@ class FaceCaptureActivity : AppCompatActivity() {
     private val frames = mutableListOf<FaceFrame>()
     private var recording = false
     private var mouthTestOn = false
+    private var mouthWidthStep = 1
     private var lastMouthReadout = 0L
 
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -117,7 +118,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.3.1"
+            text = "FACE CAPTURE · ALPHA 0.4"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -176,6 +177,22 @@ class FaceCaptureActivity : AppCompatActivity() {
                 "PRUEBA MANUAL: la boca debe abrirse. Toca de nuevo para volver al seguimiento"
                 else "Boca automática: abre la boca frente a la cámara con el rostro calibrado")
         }
+        button("Boca: suave") {
+            val interior = avatarView.toggleMouthInterior()
+            update(if (interior)
+                "Apertura suave: separación de labios y sombra discreta"
+                else "Solo textura: sin cavidad oscura, deformación original del PNG")
+        }
+        button("Ancho labios") {
+            mouthWidthStep = (mouthWidthStep + 1) % 3
+            val value = when (mouthWidthStep) {
+                0 -> .75f
+                1 -> 1f
+                else -> 1.25f
+            }
+            avatarView.lipWidth = value
+            update("Ancho de la apertura: ${(value * 100).toInt()}%")
+        }
         button("Centrar rig") {
             avatarView.setPresetPortrait()
             update("Rig restablecido. Ajusta cada ojo y la boca usando Ajustar puntos")
@@ -229,6 +246,7 @@ class FaceCaptureActivity : AppCompatActivity() {
         }
         extraControl("Sensibilidad de ojos") { avatarView.eyeSensitivity = it }
         extraControl("Sensibilidad de boca") { avatarView.mouthSensitivity = it }
+        extraControl("Apertura máxima") { avatarView.lipGap = it.coerceIn(.20f, 1.5f) }
         root.addView(footer, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         setContentView(root)
     }
@@ -311,7 +329,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     }
                 }
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
-                update("Natural Face 0.3: calibra rostro neutro y ajusta los puntos de ojos y boca")
+                update("Natural Mouth 0.4: ajusta el punto BOCA, calibra y prueba labios")
             } catch (e: Exception) {
                 running = false
                 update("No se pudo iniciar la cámara: ${e.localizedMessage}")
