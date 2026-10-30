@@ -33,6 +33,9 @@ class VisemeMouthEngine {
     private var lower = 0f
     private var teeth = 0f
 
+    var blendIntensity: Float = 1f
+        set(value) { field = value.coerceIn(.25f, 1.5f) }
+
     val hasLayers: Boolean get() = images.isNotEmpty()
     var sourceMode: MouthPhotoBlend.SourceMode
         get() = renderer.sourceMode
@@ -145,7 +148,7 @@ class VisemeMouthEngine {
                 face.cornerRightX, face.cornerRightY,
                 fw, fh, jawAmount, face.smile, face.lowerLipDrop,
                 face.mouthWidth * aspectWidth, face.mouthGap,
-                lowerCoverage, weight.coerceIn(0f, 1f)
+                lowerCoverage, (weight * blendIntensity).coerceIn(0f, 1f)
             )
         }
     }
