@@ -48,23 +48,40 @@ class FaceAvatarView(context: Context) : View(context) {
     private var layoutX = 0f
     private var layoutY = 0f
     private var layoutScale = 1f
+    private val features = FaceFeatureAnimator()
+    private var activeAnchor = 0
+
+    fun nextAnchor(): String {
+        activeAnchor = (activeAnchor + 1) % 4
+        showGuides = true
+        invalidate()
+        return when (activeAnchor) {
+            1 -> "OJO IZQUIERDO"
+            2 -> "OJO DERECHO"
+            3 -> "BOCA"
+            else -> "ROSTRO"
+        }
+    }
 
     fun setAvatar(value: Bitmap) {
         avatar = value
         neutral = null
         current = null
+        setPresetPortrait()
         invalidate()
     }
 
     fun updateFace(frame: FaceFrame) {
         current = frame
         if (neutral == null) neutral = frame
+        neutral?.let { features.update(frame, it, intensity) }
         invalidate()
     }
 
     fun calibrate(): Boolean {
         val frame = current ?: return false
         neutral = frame
+        features.resetExpressions()
         invalidate()
         return true
     }
@@ -74,6 +91,8 @@ class FaceAvatarView(context: Context) : View(context) {
         centerY = .46f
         faceWidth = .58f
         faceHeight = .54f
+        features.reset(centerX, centerY, faceWidth, faceHeight)
+        activeAnchor = 0
         invalidate()
     }
 
@@ -81,8 +100,15 @@ class FaceAvatarView(context: Context) : View(context) {
         if (!showGuides || layoutScale <= 0f || avatar == null) return false
         if (event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_MOVE) {
             val bmp = avatar ?: return false
-            centerX = ((event.x - layoutX) / (layoutScale * bmp.width)).coerceIn(.12f, .88f)
-            centerY = ((event.y - layoutY) / (layoutScale * bmp.height)).coerceIn(.12f, .88f)
+            val nx = ((event.x - layoutX) / (layoutScale * bmp.width)).coerceIn(.03f, .97f)
+            val ny = ((event.y - layoutY) / (layoutScale * bmp.height)).coerceIn(.03f, .97f)
+            if (activeAnchor == 0) {
+                features.translate(nx - centerX, ny - centerY)
+                centerX = nx
+                centerY = ny
+            } else {
+                features.setAnchor(activeAnchor, nx, ny)
+            }
             invalidate()
             return true
         }
@@ -106,6 +132,7 @@ class FaceAvatarView(context: Context) : View(context) {
         canvas.scale(layoutScale, layoutScale)
         val vertices = makeMesh(bitmap)
         canvas.drawBitmapMesh(bitmap, COLS, ROWS, vertices, 0, null, 0, imagePaint)
+        features.draw(canvas, bitmap, faceWidth, faceHeight)
         if (showGuides) {
             guidePaint.strokeWidth = bitmap.width * .003f
             canvas.drawOval(
@@ -115,17 +142,7 @@ class FaceAvatarView(context: Context) : View(context) {
                 (centerY + faceHeight / 2f) * bitmap.height,
                 guidePaint
             )
-            val points = listOf(
-                -0.22f to -0.05f, 0.22f to -0.05f,
-                -0.21f to -0.19f, 0.21f to -0.19f,
-                -0.17f to 0.19f, 0.17f to 0.19f,
-                0f to .28f, 0f to .42f, 0f to 0f
-            )
-            points.forEach { (x, y) ->
-                canvas.drawCircle((centerX + x * faceWidth) * bitmap.width,
-                    (centerY + y * faceHeight) * bitmap.height,
-                    bitmap.width * .009f, markerPaint)
-            }
+            features.drawGuides(canvas, bitmap, activeAnchor, centerX, centerY)
         }
         canvas.restore()
     }
