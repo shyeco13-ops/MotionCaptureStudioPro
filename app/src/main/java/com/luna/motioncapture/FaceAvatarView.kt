@@ -51,6 +51,13 @@ class FaceAvatarView(context: Context) : View(context) {
     private val features = FaceFeatureAnimator()
     private var activeAnchor = 0
 
+    var eyeSensitivity: Float
+        get() = features.eyeGain
+        set(value) { features.eyeGain = value.coerceIn(.25f, 2.5f); invalidate() }
+    var mouthSensitivity: Float
+        get() = features.mouthGain
+        set(value) { features.mouthGain = value.coerceIn(.25f, 2.5f); invalidate() }
+
     fun nextAnchor(): String {
         activeAnchor = (activeAnchor + 1) % 4
         showGuides = true
@@ -178,8 +185,6 @@ class FaceAvatarView(context: Context) : View(context) {
             val jaw = delta("jawOpen")
             val smileL = delta("mouthSmileLeft")
             val smileR = delta("mouthSmileRight")
-            val blinkL = delta("eyeBlinkLeft")
-            val blinkR = delta("eyeBlinkRight")
             val brows = delta("browInnerUp")
             val browL = delta("browOuterUpLeft")
             val browR = delta("browOuterUpRight")
@@ -191,13 +196,12 @@ class FaceAvatarView(context: Context) : View(context) {
             // La cara del PNG debe ser frontal. Izquierda/derecha corresponden a la pantalla.
             warp(-.21f, -.20f, 0f, -.06f * (brows + browL), .09f)
             warp(.21f, -.20f, 0f, -.06f * (brows + browR), .09f)
-            warp(-.20f, -.04f, 0f, .045f * blinkL, .065f)
-            warp(.20f, -.04f, 0f, .045f * blinkR, .065f)
             warp(-.17f, .21f, -.045f * smileL, -.035f * smileL, .09f)
             warp(.17f, .21f, .045f * smileR, -.035f * smileR, .09f)
-            warp(0f, .22f, 0f, -.045f * jaw, .09f)
-            warp(0f, .31f, 0f, .12f * jaw, .095f)
-            warp(0f, .43f, 0f, .025f * jaw, .12f)
+            // Deformación labial restringida a la zona de boca, para evitar estirar la cara.
+            warp(0f, .23f, 0f, -.012f * jaw, .055f)
+            warp(0f, .33f, 0f, .052f * jaw, .075f)
+            warp(0f, .41f, 0f, .012f * jaw, .09f)
         }
 
         for (r in 0..ROWS) for (c in 0..COLS) {
@@ -221,13 +225,14 @@ class FaceAvatarView(context: Context) : View(context) {
             }
             val i = (r * (COLS + 1) + c) * 2
             vertices[i] = (x + moveX / weight) * bitmap.width
-            vertices[i + 1] = (y + moveY / weight) * bitmap.height
+            vertices[i + 1] = (y + moveY / weight +
+                features.eyeDisplacementY(x, y, faceWidth, faceHeight)) * bitmap.height
         }
         return vertices
     }
 
     companion object {
-        private const val COLS = 28
-        private const val ROWS = 36
+        private const val COLS = 56
+        private const val ROWS = 80
     }
 }
