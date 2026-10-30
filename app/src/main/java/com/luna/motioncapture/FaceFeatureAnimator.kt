@@ -3,15 +3,23 @@ package com.luna.motioncapture
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.RectF
+import android.graphics.Path
+import android.graphics.Shader
+import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.max
 
 /**
- * Dibuja ojos y boca independientes por encima del rig 2D.
+ * Natural Face Motion — Alpha 0.3
  *
- * Es una aproximación visual para imágenes planas. No sustituye el rig de capas
- * requerido para que el interior de boca y párpados coincidan con cualquier foto.
+ * El párpado se simula con deformación de la textura original del PNG (la malla
+ * del AvatarView); no se cubre el ojo con un óvalo de color artificial.
+ *
+ * La boca usa un contorno de labios variable, no un círculo negro. Como el PNG
+ * contiene solo una vista estática, el interior bucal es una aproximación.
+ * Todo se procesa localmente y no se modifica la fotografía original.
  */
 class FaceFeatureAnimator {
     var eyeLeftX = .382f
@@ -27,17 +35,24 @@ class FaceFeatureAnimator {
     var mouthY = .595f
         private set
 
-    private var jaw = 0f
-    private var blinkLeft = 0f
-    private var blinkRight = 0f
-    private var smile = 0f
+    var eyeGain = 1f
+    var mouthGain = 1f
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    var jaw: Float = 0f
+        private set
+    var blinkLeft: Float = 0f
+        private set
+    var blinkRight: Float = 0f
+        private set
+    var smile: Float = 0f
+        private set
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val guidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 21f
         setShadowLayer(3f, 1f, 1f, Color.BLACK)
     }
+    private val path = Path()
 
     fun reset(cx: Float, cy: Float, fw: Float, fh: Float) {
         eyeLeftX = cx - .20f * fw
@@ -68,7 +83,7 @@ class FaceFeatureAnimator {
     fun setAnchor(index: Int, x: Float, y: Float) {
         val px = x.coerceIn(.03f, .97f)
         val py = y.coerceIn(.03f, .97f)
-        when(index) {
+        when (index) {
             1 -> { eyeLeftX = px; eyeLeftY = py }
             2 -> { eyeRightX = px; eyeRightY = py }
             3 -> { mouthX = px; mouthY = py }
@@ -76,102 +91,142 @@ class FaceFeatureAnimator {
     }
 
     fun update(frame: FaceFrame, neutral: FaceFrame, intensity: Float) {
-        fun expression(key: String, deadzone: Float, amplification: Float): Float =
+        fun target(key: String, deadzone: Float, gain: Float): Float =
             ((frame.expression(key) - neutral.expression(key) - deadzone) *
-                amplification * intensity).coerceIn(0f, 1f)
-        jaw = .30f * jaw + .70f * expression("jawOpen", .02f, 1.8f)
-        blinkLeft = .18f * blinkLeft + .82f * expression("eyeBlinkLeft", .03f, 1.7f)
-        blinkRight = .18f * blinkRight + .82f * expression("eyeBlinkRight", .03f, 1.7f)
-        smile = .45f * smile + .55f * max(
-            expression("mouthSmileLeft", .03f, 1.3f),
-            expression("mouthSmileRight", .03f, 1.3f)
+                gain * intensity).coerceIn(0f, 1f)
+        // Apertura relativamente suave; párpados rápidos para no perder parpadeos cortos.
+        val open = target("jawOpen", .025f, 1.25f * mouthGain)
+        val left = target("eyeBlinkLeft", .025f, 1.45f * eyeGain)
+        val right = target("eyeBlinkRight", .025f, 1.45f * eyeGain)
+        val smiling = max(
+            target("mouthSmileLeft", .03f, 1.10f),
+            target("mouthSmileRight", .03f, 1.10f)
         )
+        jaw = jaw * .53f + open * .47f
+        blinkLeft = blinkLeft * .24f + left * .76f
+        blinkRight = blinkRight * .24f + right * .76f
+        smile = smile * .66f + smiling * .34f
     }
 
-    private fun skinColor(bitmap: Bitmap, nx: Float, ny: Float): Int {
-        val x = (nx.coerceIn(0f, 1f) * (bitmap.width - 1)).toInt()
-        val y = (ny.coerceIn(0f, 1f) * (bitmap.height - 1)).toInt()
-        val sample = bitmap.getPixel(x, y)
-        return if (Color.alpha(sample) < 190) Color.rgb(190, 145, 121) else sample
+    /**
+     * Desplazamiento vertical de los vértices de la malla original para contraer
+     * la región ocular. Los píxeles del ojo se comprimen y la piel vecina ocupa
+     * su lugar; no dibujamos formas sólidas encima.
+     */
+    fun eyeDisplacementY(x: Float, y: Float, fw: Float, fh: Float): Float {
+        fun around(ex: Float, ey: Float, blink: Float): Float {
+            if (blink < .025f) return 0f
+            val rx = (x - ex) / max(.0001f, fw * .175f)
+            val ry = (y - ey) / max(.0001f, fh * .095f)
+            val influence = exp(-(rx * rx * 1.25f + ry * ry * .70f))
+            return -(y - ey) * blink * .92f * influence
+        }
+        return around(eyeLeftX, eyeLeftY, blinkLeft) +
+            around(eyeRightX, eyeRightY, blinkRight)
+    }
+
+    private fun pixel(bitmap: Bitmap, x: Float, y: Float): Int {
+        val px = (x.coerceIn(0f, 1f) * (bitmap.width - 1)).toInt()
+        val py = (y.coerceIn(0f, 1f) * (bitmap.height - 1)).toInt()
+        return bitmap.getPixel(px, py)
+    }
+
+    private fun shade(color: Int, amount: Float): Int {
+        return Color.rgb(
+            (Color.red(color) * amount).toInt().coerceIn(0, 255),
+            (Color.green(color) * amount).toInt().coerceIn(0, 255),
+            (Color.blue(color) * amount).toInt().coerceIn(0, 255)
+        )
     }
 
     fun draw(canvas: Canvas, bitmap: Bitmap, fwFraction: Float, fhFraction: Float) {
         val fw = fwFraction * bitmap.width
         val fh = fhFraction * bitmap.height
 
-        fun drawEye(x: Float, y: Float, blink: Float) {
-            if (blink < .08f) return
-            val px = x * bitmap.width
-            val py = y * bitmap.height
-            val skin = skinColor(bitmap, x, y - fhFraction * .10f)
-            val hw = fw * .137f
-            val hh = fh * (.035f + .048f * blink)
-
-            // Párpado del color de la zona próxima, no un rectángulo arbitrario.
-            paint.style = Paint.Style.FILL
-            paint.color = skin
-            paint.alpha = (blink * 335f).toInt().coerceIn(0, 255)
-            canvas.drawOval(RectF(px - hw, py - hh, px + hw, py + hh), paint)
-
-            val dark = Color.rgb(
-                (Color.red(skin) * .55f).toInt(),
-                (Color.green(skin) * .53f).toInt(),
-                (Color.blue(skin) * .53f).toInt()
-            )
-            paint.color = dark
-            paint.alpha = (blink * 220f).toInt().coerceIn(0, 220)
+        // Las arrugas del párpado son muy finas. La contracción visible la hace
+        // la malla, que mantiene los colores y textura de la foto.
+        fun crease(ex: Float, ey: Float, blink: Float) {
+            if (blink < .28f) return
+            val px = ex * bitmap.width
+            val py = ey * bitmap.height
+            val w = fw * .095f
+            val skin = pixel(bitmap, ex, ey - fhFraction * .095f)
+            paint.shader = null
+            paint.color = shade(skin, .66f)
+            paint.alpha = ((blink - .28f) * 125f).toInt().coerceIn(0, 100)
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = max(1f, fw * .012f)
-            canvas.drawArc(RectF(px - hw * .78f, py - fh * .024f,
-                px + hw * .78f, py + fh * .024f), 8f, 165f, false, paint)
+            paint.strokeWidth = max(1f, fw * .0045f)
+            path.reset()
+            path.moveTo(px - w, py + fh * .003f)
+            path.quadTo(px, py + fh * .018f, px + w, py + fh * .003f)
+            canvas.drawPath(path, paint)
             paint.style = Paint.Style.FILL
             paint.alpha = 255
         }
+        crease(eyeLeftX, eyeLeftY, blinkLeft)
+        crease(eyeRightX, eyeRightY, blinkRight)
 
-        drawEye(eyeLeftX, eyeLeftY, blinkLeft)
-        drawEye(eyeRightX, eyeRightY, blinkRight)
+        if (jaw < .10f) return
 
-        if (jaw > .065f) {
-            val px = mouthX * bitmap.width
-            val py = mouthY * bitmap.height
-            val opening = (jaw * 1.25f).coerceIn(0f, 1f)
-            val hw = fw * (.085f + smile * .055f)
-            val hh = fh * (.012f + opening * .068f)
+        val cx = mouthX * bitmap.width
+        val cy = mouthY * bitmap.height
+        // Comisuras a los lados y borde superior en forma de arco de Cupido.
+        val hw = fw * (.098f + smile * .025f)
+        val opening = (jaw - .07f).coerceIn(0f, 1f)
+        val h = fh * (.008f + opening * .070f)
+        val corner = fh * .010f - smile * fh * .026f
 
-            // Cavidad y borde de labios; la foto base se conserva en memoria.
-            paint.style = Paint.Style.FILL
-            paint.color = Color.rgb(37, 13, 24)
-            paint.alpha = (opening * 340f).toInt().coerceIn(0, 255)
-            canvas.drawOval(RectF(px - hw, py - hh, px + hw, py + hh), paint)
-            paint.color = Color.rgb(143, 72, 83)
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = max(1f, fw * .012f)
-            canvas.drawOval(RectF(px - hw, py - hh, px + hw, py + hh), paint)
-            paint.style = Paint.Style.FILL
-            paint.alpha = 255
-        }
+        path.reset()
+        path.moveTo(cx - hw, cy + corner)
+        path.cubicTo(cx - hw * .65f, cy - h * .45f,
+            cx - hw * .22f, cy - h * .72f, cx, cy - h * .62f)
+        path.cubicTo(cx + hw * .26f, cy - h * .74f,
+            cx + hw * .70f, cy - h * .37f, cx + hw, cy + corner)
+        path.cubicTo(cx + hw * .72f, cy + h * .65f,
+            cx + hw * .27f, cy + h * 1.10f, cx, cy + h)
+        path.cubicTo(cx - hw * .28f, cy + h * 1.12f,
+            cx - hw * .72f, cy + h * .63f, cx - hw, cy + corner)
+        path.close()
+
+        val lipSample = pixel(bitmap, mouthX, mouthY)
+        val dark = shade(lipSample, .30f)
+        val bottom = shade(lipSample, .43f)
+        paint.shader = LinearGradient(cx, cy - h, cx, cy + h,
+            intArrayOf(dark, shade(dark, .77f), bottom),
+            floatArrayOf(0f, .45f, 1f), Shader.TileMode.CLAMP)
+        paint.style = Paint.Style.FILL
+        paint.alpha = (opening * 250f).toInt().coerceIn(0, 245)
+        canvas.drawPath(path, paint)
+        paint.shader = null
+
+        // Perfil del labio inferior: color tomado de la foto, no borde morado.
+        paint.color = shade(lipSample, .75f)
+        paint.alpha = (opening * 115f).toInt().coerceIn(0, 115)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = max(1f, fw * .008f)
+        canvas.drawPath(path, paint)
+        paint.alpha = 255
+        paint.style = Paint.Style.FILL
     }
 
-    fun drawGuides(
-        canvas: Canvas, bitmap: Bitmap, selected: Int,
-        cx: Float, cy: Float
-    ) {
+    fun drawGuides(canvas: Canvas, bitmap: Bitmap, selected: Int, cx: Float, cy: Float) {
         val points = listOf(
-            Triple(cx, cy, "CARA"),
+            Triple(cx, cy, "ROSTRO"),
             Triple(eyeLeftX, eyeLeftY, "OJO IZQ."),
             Triple(eyeRightX, eyeRightY, "OJO DER."),
             Triple(mouthX, mouthY, "BOCA")
         )
         points.forEachIndexed { i, (x, y, name) ->
-            paint.color = if (i == selected) Color.YELLOW else Color.rgb(40, 230, 195)
-            paint.style = Paint.Style.FILL
+            paint.shader = null
             paint.alpha = 255
+            paint.style = Paint.Style.FILL
+            paint.color = if (i == selected) Color.YELLOW else Color.rgb(40, 230, 195)
             val px = x * bitmap.width
             val py = y * bitmap.height
             canvas.drawCircle(px, py, bitmap.width * .011f, paint)
-            label.textSize = bitmap.width * .026f
+            guidePaint.textSize = bitmap.width * .025f
             canvas.drawText(name, px + bitmap.width * .014f,
-                py - bitmap.height * .016f, label)
+                py - bitmap.height * .014f, guidePaint)
         }
     }
 }
