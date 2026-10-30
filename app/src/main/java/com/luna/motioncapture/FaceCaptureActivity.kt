@@ -48,6 +48,7 @@ class FaceCaptureActivity : AppCompatActivity() {
     private var recording = false
     private var mouthTestOn = false
     private var mouthWidthStep = 1
+    private var avatarKey: String = "demo"
     private var lastMouthReadout = 0L
 
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -66,10 +67,34 @@ class FaceCaptureActivity : AppCompatActivity() {
                         (original.height * ratio).toInt().coerceAtLeast(1), true)
                 } else original
                 avatarView.setAvatar(bitmap)
-                avatarView.setPresetPortrait()
-                update("PNG cargado. Usa AJUSTAR PUNTOS para colocar ojos y boca")
+                avatarKey = uri.toString()
+                val saved = getSharedPreferences("rigs_v2", MODE_PRIVATE)
+                    .getString(avatarKey, null)
+                val recovered = saved != null && avatarView.loadRig(saved)
+                update(if (recovered) "PNG cargado, puntos guardados recuperados"
+                    else "PNG cargado: ajusta ojos, labios y comisuras")
             }
         } catch (e: Exception) { update("No se pudo abrir la imagen: ${e.localizedMessage}") }
+    }
+    private val mouthImagePicker = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            contentResolver.openInputStream(uri)?.use { input ->
+                val original = BitmapFactory.decodeStream(input) ?: error("PNG no válido")
+                val longest = maxOf(original.width, original.height)
+                val fitted = if (longest > 2000) {
+                    val scale = 2000f / longest
+                    Bitmap.createScaledBitmap(
+                        original, (original.width * scale).toInt().coerceAtLeast(1),
+                        (original.height * scale).toInt().coerceAtLeast(1), true
+                    )
+                } else original
+                avatarView.setOpenMouthPhoto(fitted)
+                update("Imagen de boca abierta cargada: debe coincidir con el encuadre de la foto base")
+            }
+        } catch (e: Exception) { update("No se pudo cargar la boca: ${e.localizedMessage}") }
     }
     private val saveJson = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -90,7 +115,9 @@ class FaceCaptureActivity : AppCompatActivity() {
         assets.open("avatar_demo.png").use {
             avatarView.setAvatar(BitmapFactory.decodeStream(it))
         }
-        update("Modo rostro · abre cámara y coloca tu cara de frente")
+        getSharedPreferences("rigs_v2", MODE_PRIVATE).getString("demo", null)
+            ?.let { avatarView.loadRig(it) }
+        update("Modo rostro: prepara tus puntos o carga boca abierta PNG")
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density + .5f).toInt()
@@ -118,7 +145,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.4"
+            text = "FACE CAPTURE · ALPHA 0.5"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -152,6 +179,11 @@ class FaceCaptureActivity : AppCompatActivity() {
         }
         button("Iniciar cámara") { requestCamera() }
         button("Cargar PNG") { imagePicker.launch("image/*") }
+        button("Boca abierta PNG") { mouthImagePicker.launch("image/*") }
+        button("Quitar foto boca") {
+            avatarView.setOpenMouthPhoto(null)
+            update("Boca normal: solo textura o sombreado suave")
+        }
         cameraButton = button("Mostrar cámara") {
             cameraVisible = !cameraVisible
             previewView.alpha = if (cameraVisible) 1f else 0f
@@ -165,6 +197,17 @@ class FaceCaptureActivity : AppCompatActivity() {
         guideButton = button("Ocultar puntos") {
             avatarView.showGuides = !avatarView.showGuides
             guideButton.text = if (avatarView.showGuides) "Ocultar puntos" else "Mostrar puntos"
+        }
+        button("Guardar puntos") {
+            getSharedPreferences("rigs_v2", MODE_PRIVATE).edit()
+                .putString(avatarKey, avatarView.saveRig()).apply()
+            update("Puntos faciales guardados para la imagen actual")
+        }
+        button("Restaurar puntos") {
+            val saved = getSharedPreferences("rigs_v2", MODE_PRIVATE)
+                .getString(avatarKey, null)
+            update(if (saved != null && avatarView.loadRig(saved))
+                "Puntos recuperados" else "No hay puntos guardados para esta imagen")
         }
         button("Ajustar puntos: cara") {
             val selected = avatarView.nextAnchor()
@@ -201,7 +244,7 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Volver a cuerpo") { finish() }
 
         val caption = TextView(this).apply {
-            text = "Movimiento general · Ajustar puntos: cara → ojos → boca"
+            text = "Rig avanzado: cara → ojos → boca → labios → comisuras"
             textSize = 12f
             setTextColor(Color.WHITE)
             setPadding(dp(13), dp(5), 0, 0)
@@ -329,7 +372,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     }
                 }
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
-                update("Natural Mouth 0.4: ajusta el punto BOCA, calibra y prueba labios")
+                update("Rig 0.5: ajusta labios y comisuras; calibra antes de hablar")
             } catch (e: Exception) {
                 running = false
                 update("No se pudo iniciar la cámara: ${e.localizedMessage}")
