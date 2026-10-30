@@ -191,7 +191,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.5.1"
+            text = "FACE CAPTURE · ALPHA 0.5.2"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -265,6 +265,15 @@ class FaceCaptureActivity : AppCompatActivity() {
         button("Ajustar puntos: cara") {
             val selected = avatarView.nextAnchor()
             update("Toca o arrastra en el PNG para colocar: " + selected)
+        }
+        button("Expresión: Auto") {
+            val selected = avatarView.nextExpressionPreset()
+            update(when (selected) {
+                "FELIZ" -> "Prueba FELIZ: sonrisa, mejillas y comisuras. Toca para cambiar"
+                "SORPRESA" -> "Prueba SORPRESA: cejas, ojos y mandíbula. Toca para cambiar"
+                "ENOJO" -> "Prueba ENOJO: ceño, nariz y comisuras. Toca para volver a Auto"
+                else -> "Expresiones automáticas siguiendo la cámara"
+            })
         }
         button("Probar boca") {
             mouthTestOn = !mouthTestOn
@@ -343,6 +352,7 @@ class FaceCaptureActivity : AppCompatActivity() {
         extraControl("Sensibilidad de ojos") { avatarView.eyeSensitivity = it }
         extraControl("Sensibilidad de boca") { avatarView.mouthSensitivity = it }
         extraControl("Apertura máxima") { avatarView.lipGap = it.coerceIn(.20f, 1.5f) }
+        extraControl("Expresividad facial") { avatarView.expressionSensitivity = it }
         root.addView(footer, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         setContentView(root)
     }
@@ -404,7 +414,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                                 val blend = (avatarView.detectedJaw * 100f).toInt()
                                 val opening = (avatarView.mouthOpening * 100f).toInt()
                                 val lips = (avatarView.detectedLipDelta * 100f).toInt()
-                                update("Boca cámara: $blend% · labios Δ$lips% · personaje: $opening%")
+                                update("Boca cámara: $blend% · labios Δ$lips% · personaje: $opening%\n${avatarView.expressionReadout}")
                             }
                             if (recording) {
                                 if (frames.size < 6000) frames.add(frame)
@@ -425,7 +435,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     }
                 }
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
-                update("Smart Mouth 0.5.1: recorte/foto completa, mascara suave y labios ajustables")
+                update("Rig 0.5.2: labio inferior, expresiones feliz/sorpresa/enojo y boca calibrada")
             } catch (e: Exception) {
                 running = false
                 update("No se pudo iniciar la cámara: ${e.localizedMessage}")
