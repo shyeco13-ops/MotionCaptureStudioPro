@@ -86,7 +86,7 @@ class FaceFeatureAnimator {
     /** Prueba mecánica sin depender de la cámara. null vuelve a captura automática. */
     fun setManualMouth(value: Float?) {
         manualMouth = value?.coerceIn(0f, 1f)
-        if (manualMouth != null) jaw = manualMouth!!
+        jaw = manualMouth ?: 0f
     }
 
     private fun openingRatio(frame: FaceFrame): Float {
