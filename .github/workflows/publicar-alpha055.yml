@@ -1,0 +1,57 @@
+name: Publicar APK Alpha 0.5.5 Viseme Mouth
+
+on:
+  push:
+    branches: [feature/alpha-0.5.5-viseme-system]
+    paths:
+      - '.github/workflows/publicar-alpha055.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Configurar Android
+        uses: android-actions/setup-android@v4
+      - name: Instalar SDK Android 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Compilar APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk MotionCaptureStudioPro_Alpha_0_5_5.apk
+      - name: Publicar APK directa
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v0.5.5-alpha
+          target_commitish: feature/alpha-0.5.5-viseme-system
+          name: Motion Capture Studio Pro - Alpha 0.5.5 Viseme Mouth
+          prerelease: true
+          draft: false
+          body: |
+            Prueba Alpha 0.5.5: Viseme Mouth System
+            - Atlas de 7 bocas opcionales: semiabierta, abierta, O, sonrisa,
+              estirada, labio inferior y dientes; cerrada es el retrato original.
+            - Interpolacion suave de visemas usando blendshapes de MediaPipe.
+            - Rig local para comisuras, labio superior e inferior.
+            - Carga, borrado y persistencia privada por retrato.
+            - Reutiliza foto OPEN previa si ya existe.
+            - Modo corporal y panel plegable conservados.
+            Limitacion: no crea dientes o lengua nuevos si no estan en las fotos.
+            Formas de boca deben representar al mismo personaje.
+            Compilacion debug experimental; necesita evaluacion visual Android.
+          files: MotionCaptureStudioPro_Alpha_0_5_5.apk
+          fail_on_unmatched_files: true
