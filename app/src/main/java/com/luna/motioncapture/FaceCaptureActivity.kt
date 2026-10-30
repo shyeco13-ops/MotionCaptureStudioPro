@@ -1,5 +1,7 @@
 package com.luna.motioncapture
 
+import android.animation.ValueAnimator
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -51,6 +53,7 @@ class FaceCaptureActivity : AppCompatActivity() {
     private val frames = mutableListOf<FaceFrame>()
     private var recording = false
     private var mouthTestOn = false
+    private var mouthDemoAnimator: ValueAnimator? = null
     private var mouthWidthStep = 1
     private var avatarKey: String = "demo"
     private var lastMouthReadout = 0L
@@ -198,7 +201,7 @@ class FaceCaptureActivity : AppCompatActivity() {
             setBackgroundColor(Color.argb(237, 12, 22, 35))
         }
         header.addView(TextView(this).apply {
-            text = "FACE CAPTURE · ALPHA 0.5.3"
+            text = "FACE CAPTURE · ALPHA 0.5.4"
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, android.graphics.Typeface.BOLD)
@@ -285,10 +288,25 @@ class FaceCaptureActivity : AppCompatActivity() {
         }
         button("Probar boca") {
             mouthTestOn = !mouthTestOn
-            avatarView.previewMouth(if (mouthTestOn) .92f else null)
-            update(if (mouthTestOn)
-                "PRUEBA MANUAL: la boca debe abrirse. Toca de nuevo para volver al seguimiento"
-                else "Boca automática: abre la boca frente a la cámara con el rostro calibrado")
+            mouthDemoAnimator?.cancel()
+            mouthDemoAnimator = null
+            if (mouthTestOn) {
+                // Demostracion de apertura gradual 0 -> abierta -> 0.
+                // Sirve para observar costados y labio inferior sin usar la camara.
+                mouthDemoAnimator = ValueAnimator.ofFloat(0f, .92f, 0f).apply {
+                    duration = 2500L
+                    repeatCount = ValueAnimator.INFINITE
+                    interpolator = AccelerateDecelerateInterpolator()
+                    addUpdateListener { animator ->
+                        avatarView.previewMouth(animator.animatedValue as Float)
+                    }
+                    start()
+                }
+                update("PRUEBA GRADUAL: observa la apertura y cierre de labios; toca de nuevo para detener")
+            } else {
+                avatarView.previewMouth(null)
+                update("Boca automática: abre la boca frente a la cámara con el rostro calibrado")
+            }
         }
         button("Boca: suave") {
             val interior = avatarView.toggleMouthInterior()
@@ -500,7 +518,7 @@ class FaceCaptureActivity : AppCompatActivity() {
                     }
                 }
                 provider.bindToLifecycle(this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, analysis)
-                update("Rig 0.5.2: labio inferior, expresiones feliz/sorpresa/enojo y boca calibrada")
+                update("Rig 0.5.4: apertura progresiva, labios y comisuras suavizados")
             } catch (e: Exception) {
                 running = false
                 update("No se pudo iniciar la cámara: ${e.localizedMessage}")
@@ -547,6 +565,8 @@ class FaceCaptureActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        mouthDemoAnimator?.cancel()
+        mouthDemoAnimator = null
         super.onDestroy()
         cameraExecutor.execute { engine?.close() }
         cameraExecutor.shutdown()
