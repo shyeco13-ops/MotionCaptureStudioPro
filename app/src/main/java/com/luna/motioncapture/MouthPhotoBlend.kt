@@ -76,6 +76,7 @@ class MouthPhotoBlend {
         faceHeight: Float,
         jaw: Float,
         smile: Float,
+        lowerLipDrop: Float,
         widthScale: Float,
         gapScale: Float
     ) {
@@ -87,15 +88,20 @@ class MouthPhotoBlend {
         val lipCenterX = (leftCornerX + rightCornerX) * .50f
         val lipCenterY = (upperLipY + lowerLipY) * .50f
         val cx = (lipCenterX * .65f + mouthX * .35f) * width
-        val cy = (lipCenterY * .65f + mouthY * .35f) * height
         val cornerSpan = abs(rightCornerX - leftCornerX) * width
         val lipSpan = abs(lowerLipY - upperLipY) * height
+        // La Alpha 0.5.1 centraba la máscara demasiado arriba y ocultaba
+        // la mitad inferior de la fotografía alternativa.
+        val lipShift = (height * faceHeight * (
+            .014f * jaw + .019f * lowerLipDrop)).coerceAtMost(height * .025f)
+        val cy = ((lipCenterY * .65f + mouthY * .35f) * height) + lipShift
 
         val rx = max(cornerSpan * .64f, width * faceWidth * .075f) *
             widthScale.coerceIn(.55f, 1.55f) * (1f + .05f * smile)
-        val ry = max(lipSpan * .96f, height * faceHeight * .052f) *
+        val ry = (max(lipSpan * 1.22f, height * faceHeight * .068f) +
+            height * faceHeight * (.018f * jaw + .022f * lowerLipDrop)) *
             gapScale.coerceIn(.20f, 1.55f) *
-            (.83f + .17f * jaw.coerceIn(0f, 1f))
+            (.81f + .19f * jaw.coerceIn(0f, 1f))
 
         val safeRx = rx.coerceIn(4f, width * .25f)
         val safeRy = ry.coerceIn(3f, height * .16f)
@@ -140,8 +146,10 @@ class MouthPhotoBlend {
                 floatArrayOf(0f, .47f, 1f), Shader.TileMode.CLAMP
             )
             val matrix = Matrix()
-            matrix.setScale(safeRx, safeRy)
-            matrix.postTranslate(cx, cy)
+            // Más textura del labio inferior, manteniendo el contorno
+            // completamente transparente antes de llegar al borde.
+            matrix.setScale(safeRx * .96f, safeRy * .82f)
+            matrix.postTranslate(cx, cy + safeRy * .13f)
             shader.setLocalMatrix(matrix)
             maskPaint.shader = shader
 
