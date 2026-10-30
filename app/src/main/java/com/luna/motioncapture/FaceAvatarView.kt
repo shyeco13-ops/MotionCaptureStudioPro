@@ -367,7 +367,29 @@ class FaceAvatarView(context: Context) : View(context) {
             // Labio inferior y barbilla bajan de forma localizada.
             warp(0f, .34f, 0f,
                 .058f * features.lowerLipDrop, .075f)
-            // Boca: la deformación se calcula por vértice en el ancla real del PNG.
+            // Rig labial por puntos reales, sin mover toda la cara.
+            // Comisuras laterales: se separan para sonrisa/estiramiento y
+            // acompañan la abertura sin formar una línea horizontal rígida.
+            val mouthOpen = features.jaw
+            val smileOut = features.smile
+            val rounded = features.pucker
+            val span = kotlin.math.abs(features.cornerRightX - features.cornerLeftX)
+                .coerceAtLeast(faceWidth * .09f)
+            val sideMove = (span * (.048f * smileOut + .025f * mouthOpen -
+                .060f * rounded)).coerceIn(-faceWidth * .018f, faceWidth * .045f)
+            val cornerLift = -faceHeight * .026f * smileOut +
+                faceHeight * .007f * features.mouthFrown
+            warps.add(Warp(features.cornerLeftX, features.cornerLeftY,
+                -sideMove, cornerLift, .037f))
+            warps.add(Warp(features.cornerRightX, features.cornerRightY,
+                sideMove, cornerLift, .037f))
+            // El labio superior se eleva, el inferior baja. Son superficies
+            // independientes de los costados, con radios limitados.
+            warps.add(Warp(features.upperLipX, features.upperLipY,
+                0f, -faceHeight * .012f * mouthOpen, .043f))
+            warps.add(Warp(features.lowerLipX, features.lowerLipY,
+                0f, faceHeight * (.028f * mouthOpen +
+                    .017f * features.lowerLipDrop), .049f))
 
         for (r in 0..ROWS) for (c in 0..COLS) {
             val x = c.toFloat() / COLS
