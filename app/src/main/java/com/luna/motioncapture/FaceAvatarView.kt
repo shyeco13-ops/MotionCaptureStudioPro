@@ -114,6 +114,24 @@ class FaceAvatarView(context: Context) : View(context) {
         true
     } catch (_: Exception) { false }
 
+    var expressionSensitivity: Float
+        get() = features.expressionGain
+        set(value) { features.expressionGain = value; invalidate() }
+
+    private var presetIndex = 0
+    fun nextExpressionPreset(): String {
+        val presets = arrayOf("AUTO", "FELIZ", "SORPRESA", "ENOJO")
+        presetIndex = (presetIndex + 1) % presets.size
+        features.selectExpression(presets[presetIndex])
+        invalidate()
+        return presets[presetIndex]
+    }
+
+    val expressionReadout: String
+        get() = "Feliz ${(features.happy * 100).toInt()}% · " +
+            "Sorpresa ${(features.surprised * 100).toInt()}% · " +
+            "Enojo ${(features.angry * 100).toInt()}%"
+
     val mouthOpening: Float
         get() = features.jaw
     val detectedJaw: Float
@@ -242,7 +260,8 @@ class FaceAvatarView(context: Context) : View(context) {
                 features.cornerLeftX, features.cornerLeftY,
                 features.cornerRightX, features.cornerRightY,
                 faceWidth, faceHeight, features.jaw,
-                features.smile, features.mouthWidth, features.mouthGap
+                features.smile, features.lowerLipDrop,
+                features.mouthWidth, features.mouthGap
             )
         }
         if (showGuides) {
@@ -298,6 +317,16 @@ class FaceAvatarView(context: Context) : View(context) {
             // Expresiones regionales suavizadas en el retargeter.
             warp(-.21f, -.20f, 0f, -.045f * features.browLeft, .083f)
             warp(.21f, -.20f, 0f, -.045f * features.browRight, .083f)
+            // Ceño fruncido: extremos internos de cejas hacia adentro y abajo.
+            warp(-.095f, -.18f, .018f * features.browDown,
+                .041f * features.browDown, .060f)
+            warp(.095f, -.18f, -.018f * features.browDown,
+                .041f * features.browDown, .060f)
+            // Ojos sorprendidos: abrir sin dibujar óvalos artificiales.
+            warp(-.20f, -.083f, 0f, -.026f * features.eyeWide, .063f)
+            warp(.20f, -.083f, 0f, -.026f * features.eyeWide, .063f)
+            warp(-.20f, .012f, 0f, .020f * features.eyeWide, .062f)
+            warp(.20f, .012f, 0f, .020f * features.eyeWide, .062f)
             warp(-.27f, .10f, -.010f * features.cheekLeft,
                 -.025f * features.cheekLeft, .085f)
             warp(.27f, .10f, .010f * features.cheekRight,
@@ -307,9 +336,14 @@ class FaceAvatarView(context: Context) : View(context) {
             warp(.11f, .08f, .010f * features.noseRight,
                 -.011f * features.noseRight, .045f)
             warp(-.17f, .21f,
-                -.033f * smileL + .030f * features.pucker, -.026f * smileL, .075f)
+                -.033f * smileL + .030f * features.pucker,
+                -.026f * smileL + .041f * features.mouthFrown, .075f)
             warp(.17f, .21f,
-                .033f * smileR - .030f * features.pucker, -.026f * smileR, .075f)
+                .033f * smileR - .030f * features.pucker,
+                -.026f * smileR + .041f * features.mouthFrown, .075f)
+            // Labio inferior y barbilla bajan de forma localizada.
+            warp(0f, .34f, 0f,
+                .045f * features.lowerLipDrop, .075f)
             // Boca: la deformación se calcula por vértice en el ancla real del PNG.
         }
 
