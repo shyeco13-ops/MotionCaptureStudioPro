@@ -78,7 +78,8 @@ class MouthPhotoBlend {
         smile: Float,
         lowerLipDrop: Float,
         widthScale: Float,
-        gapScale: Float
+        gapScale: Float,
+        lowerCoverage: Float
     ) {
         if (jaw <= .025f || opened.width < 2 || opened.height < 2) return
         val width = closed.width.toFloat()
@@ -104,23 +105,28 @@ class MouthPhotoBlend {
             (.81f + .19f * jaw.coerceIn(0f, 1f))
 
         val safeRx = rx.coerceIn(4f, width * .25f)
-        val safeRy = ry.coerceIn(3f, height * .16f)
-        val bounds = RectF(cx - safeRx, cy - safeRy, cx + safeRx, cy + safeRy)
+        val safeRy = ry.coerceIn(3f, height * .12f)
+        // Una máscara SIMÉTRICA cortaba el labio inferior. Usamos límites
+        // verticales diferentes: más espacio bajo los labios y barbilla.
+        val upperReach = safeRy * .98f
+        val lowerReach = safeRy * (.98f + .47f * lowerCoverage.coerceIn(.35f, 2f))
+        val bounds = RectF(
+            cx - safeRx, cy - upperReach,
+            cx + safeRx, cy + lowerReach
+        )
         val mode = effectiveMode(closed, opened)
 
         val src = if (mode == SourceMode.FULL_PORTRAIT) {
             // Matching full-frame image: sample the equivalent coordinates.
             val sx = opened.width / width
             val sy = opened.height / height
-            val halfW = (safeRx * sx).toInt()
-            val halfH = (safeRy * sy).toInt()
-            val scx = (cx * sx).toInt()
-            val scy = (cy * sy).toInt()
+            // Usar el rectángulo completo de destino para tomar la misma
+            // región de la foto abierta, incluyendo el labio inferior.
             Rect(
-                (scx - halfW).coerceIn(0, opened.width - 1),
-                (scy - halfH).coerceIn(0, opened.height - 1),
-                (scx + halfW).coerceIn(1, opened.width),
-                (scy + halfH).coerceIn(1, opened.height)
+                (bounds.left * sx).toInt().coerceIn(0, opened.width - 2),
+                (bounds.top * sy).toInt().coerceIn(0, opened.height - 2),
+                (bounds.right * sx).toInt().coerceIn(2, opened.width),
+                (bounds.bottom * sy).toInt().coerceIn(2, opened.height)
             )
         } else {
             // A crop is a mouth image, not an entire face.
@@ -143,13 +149,16 @@ class MouthPhotoBlend {
             val shader = RadialGradient(
                 0f, 0f, 1f,
                 intArrayOf(Color.WHITE, Color.WHITE, Color.TRANSPARENT),
-                floatArrayOf(0f, .47f, 1f), Shader.TileMode.CLAMP
+                floatArrayOf(0f, .58f, 1f), Shader.TileMode.CLAMP
             )
             val matrix = Matrix()
             // Más textura del labio inferior, manteniendo el contorno
             // completamente transparente antes de llegar al borde.
-            matrix.setScale(safeRx * .96f, safeRy * .82f)
-            matrix.postTranslate(cx, cy + safeRy * .13f)
+            matrix.setScale(
+                safeRx * .98f,
+                bounds.height() * .51f
+            )
+            matrix.postTranslate(cx, bounds.centerY())
             shader.setLocalMatrix(matrix)
             maskPaint.shader = shader
 
