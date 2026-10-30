@@ -51,6 +51,19 @@ class FaceAvatarView(context: Context) : View(context) {
     private val features = FaceFeatureAnimator()
     private var activeAnchor = 0
 
+    val mouthOpening: Float
+        get() = features.jaw
+    val detectedJaw: Float
+        get() = features.mouthBlendshape
+    val detectedLipDelta: Float
+        get() = features.mouthLandmark
+
+    /** Boca fija de prueba: así se diferencia un problema de dibujo de uno de detección. */
+    fun previewMouth(value: Float?) {
+        features.setManualMouth(value)
+        invalidate()
+    }
+
     var eyeSensitivity: Float
         get() = features.eyeGain
         set(value) { features.eyeGain = value.coerceIn(.25f, 2.5f); invalidate() }
@@ -182,7 +195,6 @@ class FaceAvatarView(context: Context) : View(context) {
             }
             fun delta(key: String): Float =
                 (live.expression(key) - base.expression(key)).coerceIn(0f, 1f) * intensity
-            val jaw = delta("jawOpen")
             val smileL = delta("mouthSmileLeft")
             val smileR = delta("mouthSmileRight")
             val brows = delta("browInnerUp")
@@ -198,10 +210,19 @@ class FaceAvatarView(context: Context) : View(context) {
             warp(.21f, -.20f, 0f, -.06f * (brows + browR), .09f)
             warp(-.17f, .21f, -.045f * smileL, -.035f * smileL, .09f)
             warp(.17f, .21f, .045f * smileR, -.035f * smileR, .09f)
-            // Deformación labial restringida a la zona de boca, para evitar estirar la cara.
-            warp(0f, .23f, 0f, -.012f * jaw, .055f)
-            warp(0f, .33f, 0f, .052f * jaw, .075f)
-            warp(0f, .41f, 0f, .012f * jaw, .09f)
+            // El centro de la boca ya no depende de la guía del rostro:
+            // sigue el ancla BOCA que el usuario coloca sobre el PNG.
+            val openMouth = features.jaw
+            val mx = features.mouthX
+            val my = features.mouthY
+            warps.add(Warp(mx, my - faceHeight * .055f,
+                0f, -faceHeight * .019f * openMouth, .048f))
+            warps.add(Warp(mx, my + faceHeight * .070f,
+                0f, faceHeight * .064f * openMouth, .055f))
+            warps.add(Warp(mx - faceWidth * .15f, my,
+                -faceWidth * .013f * openMouth, 0f, .045f))
+            warps.add(Warp(mx + faceWidth * .15f, my,
+                faceWidth * .013f * openMouth, 0f, .045f))
         }
 
         for (r in 0..ROWS) for (c in 0..COLS) {
